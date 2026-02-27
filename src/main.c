@@ -29,6 +29,7 @@ void periph_init()
 	SystemCoreClockUpdate();
 	led_init();
 	UART1_init();
+	UART2_init();
 	I2C_init();
 	OLED_init();
 }
@@ -52,10 +53,6 @@ int main(void)
     bool success;
 	
 	while(1) {
-		check();
-		check();
-		check();
-		check();
 		success = MODBUS_ReadFloat(SBS_ADDR, SBS_TEMP_REG, &temp);
 		mtimer_sleep(100);
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
@@ -64,6 +61,7 @@ int main(void)
 		OLED_printF(temp, 4, false);
 		OLED_setpos(0, 1); 
 		OLED_printD((uint32_t)nchan, false);
+		UART2_SendUInt16_AsString(nchan);
 		mtimer_sleep(1000);
 		OLED_clear();
 	}

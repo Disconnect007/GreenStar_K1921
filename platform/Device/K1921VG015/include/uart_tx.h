@@ -21,7 +21,15 @@ void UART1_SendBuffer(const uint8_t *data, uint16_t length);
 bool UART1_DataAvailable(void);
 void UART1_FlushRx(void);
 uint16_t UART1_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
-
+void UART2_init();
+void UART2_SendFloat(float value);
+void UART2_SendString(const char *str);
+void UART2_SendUInt16(const uint16_t num);
+void UART2_SendBuffer(const uint8_t *data, uint16_t length);
+bool UART2_DataAvailable(void);
+void UART2_FlushRx(void);
+uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
+void UART2_SendUInt16_AsString(uint16_t num);
 
 #ifdef __cplusplus
 };
