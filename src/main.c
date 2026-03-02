@@ -61,8 +61,8 @@ int main(void)
 		OLED_printF(temp, 4, false);
 		OLED_setpos(0, 1); 
 		OLED_printD((uint32_t)nchan, false);
-		UART2_SendUInt16_AsString(nchan);
-		mtimer_sleep(1000);
+		UART2_Send_Uint_Float_AsString(nchan, temp);
+		check();
 		OLED_clear();
 	}
 

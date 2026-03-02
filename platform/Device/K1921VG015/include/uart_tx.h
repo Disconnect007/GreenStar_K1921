@@ -29,7 +29,7 @@ void UART2_SendBuffer(const uint8_t *data, uint16_t length);
 bool UART2_DataAvailable(void);
 void UART2_FlushRx(void);
 uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
-void UART2_SendUInt16_AsString(uint16_t num);
+void UART2_Send_Uint_Float_AsString(uint16_t int_val, float float_val);
 
 #ifdef __cplusplus
 };
