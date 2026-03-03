@@ -1,16 +1,3 @@
-// ===================================================================================
-// SSD1306 128x64 Pixels OLED Terminal Functions                              * v1.5 *
-// ===================================================================================
-//
-// Collection of the most necessary functions for controlling an SSD1306 128x64 pixels
-// I2C OLED for the display of text in the context of emulating a terminal output.
-//
-// References:
-// -----------
-// - Neven Boyanov: https://github.com/tinusaur/ssd1306xled
-//
-// 2024 by Enol Matilla: https://github.com/rotura
-
 #pragma once
 
 #ifdef __cplusplus

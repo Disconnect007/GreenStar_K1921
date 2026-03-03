@@ -1,16 +1,3 @@
-// ===================================================================================
-// SSD1306 128x64 Pixels OLED Terminal Functions                              * v1.5 *
-// ===================================================================================
-//
-// Collection of the most necessary functions for controlling an SSD1306 128x64 pixels
-// I2C OLED for the display of text in the context of emulating a terminal output.
-//
-// References:
-// -----------
-// - Neven Boyanov: https://github.com/tinusaur/ssd1306xled
-//
-// 2024 by Enol Matilla: https://github.com/rotura
-
 #include "oled_small.h"
 
 // OLED initialisation sequence
@@ -49,7 +36,8 @@ const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
 uint8_t line, column, scroll;
 
 // OLED set cursor to line start
-void OLED_setline(uint8_t line) {
+void OLED_setline(uint8_t line) 
+{
   I2C_start(OLED_ADDR);                   // start transmission to OLED
   I2C_write(OLED_CMD_MODE);               // set command mode
   I2C_write(OLED_PAGE + line);            // set line
@@ -58,7 +46,8 @@ void OLED_setline(uint8_t line) {
 }
 
 // OLED clear line
-void OLED_clearline(uint8_t line) {
+void OLED_clearline(uint8_t line) 
+{
   uint8_t i;
   OLED_setline(line);                     // set cursor to line start
   I2C_start(OLED_ADDR);                   // start transmission to OLED
@@ -70,7 +59,8 @@ void OLED_clearline(uint8_t line) {
 }
 
 // OLED clear screen and buffer
-void OLED_clear(void) {
+void OLED_clear(void) 
+{
   uint16_t i;
 		OLED_setpos(0, 0);                            // set cursor to first digit
   I2C_start(OLED_ADDR);                           // start transmission to OLED
@@ -82,7 +72,8 @@ void OLED_clear(void) {
 }
 
 // OLED clear the top line, then scroll the display up by one line
-void OLED_scrollDisplay(void) {
+void OLED_scrollDisplay(void) 
+{
   OLED_clearline(scroll);                 // clear line
   scroll = (scroll + 1) & 0x07;           // set next line
   I2C_start(OLED_ADDR);                   // start transmission to OLED
@@ -93,7 +84,8 @@ void OLED_scrollDisplay(void) {
 }
 
 // OLED init function
-void OLED_init(void) {
+void OLED_init(void) 
+{
   uint8_t i;
   I2C_init();                             // initialize I2C first
   I2C_start(OLED_ADDR);                   // start transmission to OLED
@@ -109,7 +101,8 @@ void OLED_init(void) {
 }
 
 // OLED plot a single character
-void OLED_plotChar(char c, bool inverted) {
+void OLED_plotChar(char c, bool inverted) 
+{
   I2C_start(OLED_ADDR);
   I2C_write(OLED_DAT_MODE);
   for(short i = 0 ; i != 8; i++) {
@@ -120,7 +113,8 @@ void OLED_plotChar(char c, bool inverted) {
 }
 
 // OLED write a character or handle control characters
-void OLED_write(char c, bool inverted) {
+void OLED_write(char c, bool inverted) 
+{
   c = c & 0x7F;                           // ignore top bit
   // normal character
   if(c >= 32) {
@@ -140,21 +134,24 @@ void OLED_write(char c, bool inverted) {
 }
 
 // OLED print string
-void OLED_print(char* str) {
+void OLED_print(char* str) 
+{
   while(*str) {
     OLED_write(*str++, false);
   }
 }
 
 // OLED print string
-void OLED_printS(char* str, bool inverted) {
+void OLED_printS(char* str, bool inverted) 
+{
   while(*str) {
     OLED_write(*str++, inverted);
   }
 }
 
 // OLED print string with newline
-void OLED_println(char* str, bool inverted) {
+void OLED_println(char* str, bool inverted) 
+{
   OLED_printS(str, inverted);
   OLED_write('\n', inverted);
 }
@@ -163,7 +160,8 @@ void OLED_println(char* str, bool inverted) {
 const uint32_t DIVIDER[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
 // Print decimal value (BCD conversion by substraction method)
-void OLED_printD(uint32_t value, bool inverted) {
+void OLED_printD(uint32_t value, bool inverted) 
+{
   uint8_t digits   = 10;                          // print 10 digits
   uint8_t leadflag = 0;                           // flag for leading spaces
   while(digits--) {                               // for all digits
@@ -179,7 +177,8 @@ void OLED_printD(uint32_t value, bool inverted) {
   }
 }
 
-void OLED_printF(float value, uint8_t precision, bool inverted) {
+void OLED_printF(float value, uint8_t precision, bool inverted) 
+{
   static const uint32_t pow10[7] = {1, 10, 100, 1000, 10000, 100000, 1000000};
   if (precision > 6) 
     precision = 6;
@@ -214,30 +213,35 @@ void OLED_printF(float value, uint8_t precision, bool inverted) {
 }
 
 // Convert byte nibble into hex character and print it
-void OLED_printN(uint8_t nibble, bool inverted) {
+void OLED_printN(uint8_t nibble, bool inverted) 
+{
   OLED_write((nibble <= 9) ? ('0' + nibble) : ('A' - 10 + nibble), inverted);
 }
 
 // Convert byte into hex characters and print it
-void OLED_printB(uint8_t value, bool inverted) {
+void OLED_printB(uint8_t value, bool inverted) 
+{
   OLED_printN(value >> 4, inverted);
   OLED_printN(value & 0x0f, inverted);
 }
 
 // Convert word into hex characters and print it
-void OLED_printW(uint16_t value, bool inverted) {
+void OLED_printW(uint16_t value, bool inverted) 
+{
   OLED_printB(value >> 8, inverted);
   OLED_printB(value, inverted);
 }
 
 // Convert long into hex characters and print it
-void OLED_printL(uint32_t value, bool inverted) {
+void OLED_printL(uint32_t value, bool inverted) 
+{
   OLED_printW(value >> 16, inverted);
   OLED_printW(value, inverted);
 }
 
 // OLED set cursor position 
-void OLED_setpos(uint8_t x, uint8_t y) {
+void OLED_setpos(uint8_t x, uint8_t y) 
+{
   I2C_start(OLED_ADDR);                   // start transmission to OLED
   I2C_write(OLED_CMD_MODE);               // set command mode
   I2C_write(OLED_PAGE | y);	              // set page start address
@@ -246,7 +250,8 @@ void OLED_setpos(uint8_t x, uint8_t y) {
   I2C_stop();                             // stop transmission
 }
 
-void ssd1306_start_data(void) {
+void ssd1306_start_data(void) 
+{
   I2C_start(OLED_ADDR);   
 	I2C_write(0x40);			// Control byte: D/C=1 - write data
 }
@@ -263,7 +268,8 @@ void OLED_fill(uint8_t p) {
 }
 
 // OLED draw bitmap
-void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted) {
+void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted) 
+{
 	int z=0;
   for(uint8_t y = y0; y < y0+(h/8); y++) {
     OLED_setpos(x0, y);
@@ -279,7 +285,8 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
 }
 
 
-void OLED_print_ru_letter(uint8_t index, bool inverted) {
+void OLED_print_ru_letter(uint8_t index, bool inverted) 
+{
   if(index >= 4) return; 
   I2C_start(OLED_ADDR);
   I2C_write(OLED_DAT_MODE);
