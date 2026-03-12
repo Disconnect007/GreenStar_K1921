@@ -49,19 +49,46 @@ int main(void)
 	periph_init();
 	check();
 	float temp;
-	uint16_t nchan;
     bool success;
+	uint16_t nchan;
+	static uint32_t spectrum[4096];
 	
 	while(1) {
+		/*
 		success = MODBUS_ReadFloat(SBS_ADDR, SBS_TEMP_REG, &temp);
 		mtimer_sleep(100);
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
 		mtimer_sleep(100);
 		OLED_setpos(0, 0); 
-		OLED_printF(temp, 4, false);
+		OLED_printF(temp, 2, false);
 		OLED_setpos(0, 1); 
 		OLED_printD((uint32_t)nchan, false);
 		UART2_Send_Uint_Float_AsString(nchan, temp);
+		check();
+		OLED_clear();
+		*/
+		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
+		mtimer_sleep(50);
+		uint32_t spectrum[nchan];
+		for (uint16_t i = 0; i < 4096; i++) {
+            spectrum[i] = (uint32_t)-1;
+        }
+		success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectrum);
+		if (success) {
+            uint16_t filled = 0;
+            for (uint16_t i = 0; i < nchan; i++) {
+                if (spectrum[i] != (uint32_t)-1) {
+                    filled++;
+                }
+            }
+			OLED_setpos(0, 0);
+			OLED_printS("Zapolneno kanalov", false);
+            OLED_setpos(0, 1);
+            OLED_printD((uint32_t)filled, false);
+        } else {
+            OLED_setpos(0, 0);
+            OLED_printS("Read error", false);
+        }
 		check();
 		OLED_clear();
 	}
