@@ -51,23 +51,11 @@ int main(void)
 	float temp;
     bool success;
 	uint16_t nchan;
-	static uint32_t spectr[128];
+	static uint32_t spectr[4096] = {};
 
 	while(1) {
-		/*
-		success = MODBUS_ReadFloat(SBS_ADDR, SBS_TEMP_REG, &temp);
-		mtimer_sleep(100);
-		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
-		mtimer_sleep(100);
-		OLED_setpos(0, 0); 
-		OLED_printF(temp, 2, false);
-		OLED_setpos(0, 1); 
-		OLED_printD((uint32_t)nchan, false);
-		UART2_Send_Uint_Float_AsString(nchan, temp);
+
 		check();
-		OLED_clear();
-		*/
-		mtimer_sleep(2000);
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
 		mtimer_sleep(50);
 		OLED_setpos(0, 0);
@@ -76,29 +64,15 @@ int main(void)
 		OLED_printD((uint32_t)nchan, false);
 		mtimer_sleep(2000);
 
-		for (uint16_t i = 0; i < 4096; i++) {
-            spectr[i] = 11;
-        }
-
 		success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
 		mtimer_sleep(50);
 		if (success) {
-            uint16_t filled = 0;
-            for (uint16_t i = 0; i < nchan; i++) {
-                if (spectr[i] != 11) {
-                    filled++;
-                }
-            }
 			OLED_setpos(0, 2);
-			OLED_printS("FILLED:", false);
-            OLED_setpos(64, 2);
-            OLED_printD((uint32_t)filled, false);
-
+			OLED_printS("ACK:", false);
         } else {
             OLED_setpos(0, 2);
             OLED_printS("READ ERROR", false);
         }
-		mtimer_sleep(2000);
 		check();
 		OLED_clear();
 	}

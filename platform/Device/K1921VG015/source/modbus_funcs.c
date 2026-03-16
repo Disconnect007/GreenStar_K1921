@@ -188,6 +188,14 @@ bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_
     return false;
 }
 
+/**
+ * @brief Вспомогательная функция для преобразования 4-х байт в 32-битное значение для спектра
+ * @note Формат: big-endian [A B C D]
+ */
+static uint32_t spectrum_bytes_to_u32(const uint8_t bytes[4]) 
+{
+    return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+}
 
 /**
  * @brief Преобразование блока сырых данных в массив uint32_t
@@ -195,7 +203,7 @@ bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_
 static void convert_spectrum_block(uint8_t *src, uint32_t *dst, uint16_t count) 
 {
     for (uint16_t i = 0; i < count; i++) {
-        dst[i] = modbus_bytes_to_u32(&src[i * 4]);
+        dst[i] = spectrum_bytes_to_u32(&src[i * 4]);
     }
 }
 
