@@ -31,7 +31,7 @@ void periph_init()
 	UART1_init();
 	UART2_init();
 	I2C_init();
-	OLED_init();
+	//OLED_init();
 }
 
 //--- USER FUNCTIONS -----------------------------------------------------------
@@ -64,49 +64,29 @@ int main(void)
 	static uint32_t spectr[4096] = {};
 
 	while(1) {
+		mtimer_sleep(50);
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
 		mtimer_sleep(50);
 		if (success) {
-			OLED_setpos(0, 0);
-			OLED_printS("CHANNELS ACK", false);
-			mtimer_sleep(500);
-        } else {
-            OLED_setpos(0, 0);
-            OLED_printS("READ ERROR", false);
-			mtimer_sleep(500);
-        }
-		success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
-		mtimer_sleep(50);
-		if (success) {
-			OLED_setpos(0, 2);
-			OLED_printS("SPECTRUM ACK", false);
-			mtimer_sleep(500);
-        } else {
-            OLED_setpos(0, 2);
-            OLED_printS("READ ERROR", false);
-			mtimer_sleep(500);
-        }
-		success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
-		mtimer_sleep(50);
-		if (success && ltime > 0.1) {
-			OLED_setpos(0, 4);
-			OLED_printS("LTIME ACK", false);
-			mtimer_sleep(500);
-			maed = DoseRate(spectr, nchan, ltime, DZ);
-			OLED_clear();
-			OLED_setpos(0, 0);
-			OLED_printS("MAED: ", false);
-			OLED_setpos(0, 68);
-			OLED_printF(maed, 4, false);
-			mtimer_sleep(500);
-			OLED_clear();
-        } else {
-            OLED_setpos(0, 6);
-            OLED_printS("READ ERROR", false);
-			mtimer_sleep(500);
-			OLED_clear();
-        }
+			success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
+			mtimer_sleep(50);
+			if (success) {
+				success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
+				mtimer_sleep(50);
+				if (success && ltime > 0.0) {
+					maed = DoseRate(spectr, nchan, ltime, DZ);
+					UART2_Send_Data(nchan, maed);
+					mtimer_sleep(50);
+				} else {
+					UART2_Send_Error();
+				}	
+			} else {
+				UART2_Send_Error();
+			}	
+		} else {
+			UART2_Send_Error();
+		}
 	}
-
+	
 	return 0;
 }

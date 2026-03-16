@@ -236,18 +236,17 @@ uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
     return received;
 }
 
-void UART2_Send_Uint_Float_AsString(uint16_t int_val, float float_val)
+void UART2_Send_Data(uint16_t channels, float adr)
 {
-    int8_t buffer[32];
+    uint8_t buffer[64];
     uint8_t i = 0;
 
-    // --- Преобразование целого числа (uint16_t) ---
-    if (int_val == 0) {
+    if (channels == 0) {
         buffer[i++] = '0';
     } else {
         uint8_t rev[8];
         uint8_t j = 0;
-        uint16_t num = int_val;
+        uint16_t num = channels;
         while (num > 0) {
             rev[j++] = '0' + (num % 10);
             num /= 10;
@@ -257,27 +256,21 @@ void UART2_Send_Uint_Float_AsString(uint16_t int_val, float float_val)
         }
     }
 
-    buffer[i++] = ',';   // разделитель
+    buffer[i++] = ',';  
 
-    // --- Преобразование float с тремя знаками после запятой ---
-    // Обработка отрицательного значения
-    if (float_val < 0) {
+    if (adr < 0) {
         buffer[i++] = '-';
-        float_val = -float_val;
+        adr = -adr;
     }
 
-    // Целая часть
-    uint32_t int_part = (uint32_t)float_val;
-    // Дробная часть с округлением до 3 знаков
-    uint32_t frac_part = (uint32_t)((float_val - int_part) * 1000.0f + 0.5f);
+    uint32_t int_part = (uint32_t)adr;
+    uint32_t frac_part = (uint32_t)((adr - int_part) * 10000.0f + 0.5f);
 
-    // Коррекция, если округление дало 1000 (например, 0.9995)
-    if (frac_part >= 1000) {
+    if (frac_part >= 10000) {
         frac_part = 0;
         int_part++;
     }
 
-    // Вывод целой части float
     if (int_part == 0) {
         buffer[i++] = '0';
     } else {
@@ -293,18 +286,24 @@ void UART2_Send_Uint_Float_AsString(uint16_t int_val, float float_val)
         }
     }
 
-    buffer[i++] = '.';   // десятичная точка
+    buffer[i++] = '.';
 
-    // Вывод трёх цифр дробной части (с ведущими нулями)
     uint32_t frac = frac_part;
+    buffer[i++] = '0' + (frac / 1000);
+    frac %= 1000;
     buffer[i++] = '0' + (frac / 100);
     frac %= 100;
     buffer[i++] = '0' + (frac / 10);
     buffer[i++] = '0' + (frac % 10);
 
-    // Завершающие символы
     buffer[i++] = '\r';
     buffer[i++] = '\n';
 
     UART2_SendBuffer(buffer, i);
+}
+
+void UART2_Send_Error(void)
+{
+    uint8_t buffer[] = "ERROR\r\n";
+    UART2_SendBuffer(buffer, sizeof(buffer));
 }
