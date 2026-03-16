@@ -12,7 +12,7 @@
 #define LEDS_MSK  0xF000
 #define LED0_PIN  12
 #define LED0_MSK  (1 << LED0_PIN)
-
+#define DZ 		  (float) 0.000001
 
 //-- Peripheral init functions ------------------------------------------------
 void led_init() 
@@ -43,38 +43,69 @@ void check()
 	GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
+float DoseRate(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
+{
+	float dose;
+	for(uint16_t i = 0; i < nchannels; i++) {
+		dose += spectr[i] * i;
+	}
+	dose = dose * Dz / ltime;
+	return dose;
+}
+
 //-- Main ----------------------------------------------------------------------
 int main(void) 
 {
 	periph_init();
 	check();
-	float temp;
+	float maed, ltime = 0.0;
     bool success;
 	uint16_t nchan;
 	static uint32_t spectr[4096] = {};
 
 	while(1) {
-
-		check();
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
 		mtimer_sleep(50);
-		OLED_setpos(0, 0);
-		OLED_printS("CHANNELS: ", false);
-		OLED_setpos(82, 0);
-		OLED_printD((uint32_t)nchan, false);
-		mtimer_sleep(2000);
-
+		if (success) {
+			OLED_setpos(0, 0);
+			OLED_printS("CHANNELS ACK", false);
+			mtimer_sleep(500);
+        } else {
+            OLED_setpos(0, 0);
+            OLED_printS("READ ERROR", false);
+			mtimer_sleep(500);
+        }
 		success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
 		mtimer_sleep(50);
 		if (success) {
 			OLED_setpos(0, 2);
-			OLED_printS("ACK:", false);
+			OLED_printS("SPECTRUM ACK", false);
+			mtimer_sleep(500);
         } else {
             OLED_setpos(0, 2);
             OLED_printS("READ ERROR", false);
+			mtimer_sleep(500);
         }
-		check();
-		OLED_clear();
+		success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
+		mtimer_sleep(50);
+		if (success && ltime > 0.1) {
+			OLED_setpos(0, 4);
+			OLED_printS("LTIME ACK", false);
+			mtimer_sleep(500);
+			maed = DoseRate(spectr, nchan, ltime, DZ);
+			OLED_clear();
+			OLED_setpos(0, 0);
+			OLED_printS("MAED: ", false);
+			OLED_setpos(0, 68);
+			OLED_printF(maed, 4, false);
+			mtimer_sleep(500);
+			OLED_clear();
+        } else {
+            OLED_setpos(0, 6);
+            OLED_printS("READ ERROR", false);
+			mtimer_sleep(500);
+			OLED_clear();
+        }
 	}
 
 	return 0;
