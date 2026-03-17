@@ -236,17 +236,62 @@ uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
     return received;
 }
 
-void UART2_Send_Data(uint16_t channels, float adr)
+uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals)
+{
+    if (value < 0) {
+        buffer[idx++] = '-';
+        value = -value;
+    }
+
+    // Масштабируем до целого числа с округлением
+    uint32_t factor = 1;
+    for (uint8_t i = 0; i < decimals; i++) factor *= 10;
+    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
+
+    uint32_t int_part = scaled / factor;
+    uint32_t frac_part = scaled % factor;
+
+    // Вывод целой части
+    uint8_t temp[16];
+    uint8_t j = 0;
+    if (int_part == 0) {
+        temp[j++] = '0';
+    } else {
+        uint32_t num = int_part;
+        while (num > 0) {
+            temp[j++] = '0' + (num % 10);
+            num /= 10;
+        }
+    }
+    while (j > 0) {
+        buffer[idx++] = temp[--j];
+    }
+
+    buffer[idx++] = '.';
+
+    // Вывод дробной части с ведущими нулями
+    uint32_t frac = frac_part;
+    uint32_t divisor = factor / 10;
+    for (uint8_t d = 0; d < decimals; d++) {
+        buffer[idx++] = '0' + (frac / divisor);
+        frac %= divisor;
+        divisor /= 10;
+    }
+
+    return idx;
+}
+
+void UART2_Send_Data(uint16_t a, float b, float c)
 {
     uint8_t buffer[64];
     uint8_t i = 0;
 
-    if (channels == 0) {
+    if (a == 0) {
         buffer[i++] = '0';
     } else {
         uint8_t rev[8];
         uint8_t j = 0;
-        uint16_t num = channels;
+        uint16_t num = a;
         while (num > 0) {
             rev[j++] = '0' + (num % 10);
             num /= 10;
@@ -256,45 +301,11 @@ void UART2_Send_Data(uint16_t channels, float adr)
         }
     }
 
-    buffer[i++] = ',';  
+    buffer[i++] = ',';
+    i = append_float(buffer, i, b, 3);
 
-    if (adr < 0) {
-        buffer[i++] = '-';
-        adr = -adr;
-    }
-
-    uint32_t int_part = (uint32_t)adr;
-    uint32_t frac_part = (uint32_t)((adr - int_part) * 10000.0f + 0.5f);
-
-    if (frac_part >= 10000) {
-        frac_part = 0;
-        int_part++;
-    }
-
-    if (int_part == 0) {
-        buffer[i++] = '0';
-    } else {
-        uint8_t rev[16];
-        uint8_t j = 0;
-        uint32_t num = int_part;
-        while (num > 0) {
-            rev[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-        while (j > 0) {
-            buffer[i++] = rev[--j];
-        }
-    }
-
-    buffer[i++] = '.';
-
-    uint32_t frac = frac_part;
-    buffer[i++] = '0' + (frac / 1000);
-    frac %= 1000;
-    buffer[i++] = '0' + (frac / 100);
-    frac %= 100;
-    buffer[i++] = '0' + (frac / 10);
-    buffer[i++] = '0' + (frac % 10);
+    buffer[i++] = ',';
+    i = append_float(buffer, i, c, 3);
 
     buffer[i++] = '\r';
     buffer[i++] = '\n';
@@ -305,5 +316,5 @@ void UART2_Send_Data(uint16_t channels, float adr)
 void UART2_Send_Error(void)
 {
     uint8_t buffer[] = "ERROR\r\n";
-    UART2_SendBuffer(buffer, sizeof(buffer));
+    UART2_SendBuffer(buffer, sizeof(buffer) - 1);
 }

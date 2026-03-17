@@ -12,7 +12,7 @@
 #define LEDS_MSK  0xF000
 #define LED0_PIN  12
 #define LED0_MSK  (1 << LED0_PIN)
-#define DZ 		  (float) 0.000001
+#define DZ 		  1.0E-6f
 
 //-- Peripheral init functions ------------------------------------------------
 void led_init() 
@@ -43,13 +43,23 @@ void check()
 	GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
-float DoseRate(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
+float DoseRate_Dz(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
 {
-	float dose;
+	float dose = 0.0f;
 	for(uint16_t i = 0; i < nchannels; i++) {
-		dose += spectr[i] * i;
+		dose += (float)spectr[i] * i;
 	}
 	dose = dose * Dz / ltime;
+	return dose;
+}
+
+float DoseRate_Inprate(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz)
+{
+	float dose = 0.0f;
+	for(uint16_t i = 0; i < nchannels; i++) {
+		dose += (float)spectr[i] * i;
+	}
+	dose = dose * inprate * Dz / (ltime * 640.0f);
 	return dose;
 }
 
@@ -58,25 +68,28 @@ int main(void)
 {
 	periph_init();
 	check();
-	float maed, ltime = 0.0;
-    bool success;
-	uint16_t nchan;
+	float adr = 0.0f, 
+		  ltime = 0.0f, 
+		  inprate = 0.0f;
+    bool success = false;
+	uint16_t nchan = 0;
 	static uint32_t spectr[4096] = {};
 
 	while(1) {
-		mtimer_sleep(50);
+		mtimer_sleep(2);
 		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
-		mtimer_sleep(50);
 		if (success) {
 			success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
-			mtimer_sleep(50);
 			if (success) {
 				success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
-				mtimer_sleep(50);
-				if (success && ltime > 0.0) {
-					maed = DoseRate(spectr, nchan, ltime, DZ);
-					UART2_Send_Data(nchan, maed);
-					mtimer_sleep(50);
+				if (success && ltime > 0.0f) {
+					success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
+					if (success) {
+						adr = DoseRate_Inprate(spectr, nchan, ltime, inprate, DZ);
+						UART2_Send_Data(nchan, adr, inprate);
+					} else {
+						UART2_Send_Error();
+					}
 				} else {
 					UART2_Send_Error();
 				}	
