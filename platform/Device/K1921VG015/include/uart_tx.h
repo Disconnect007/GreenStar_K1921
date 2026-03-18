@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define UART_BAUD 115200
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,24 +16,15 @@ typedef union {
 } FloatBytes_t;
 
 void UART1_init();
-void UART1_SendFloat(float value);
-void UART1_SendString(const char *str);
-void UART1_SendUInt16(const uint16_t num);
 void UART1_SendBuffer(const uint8_t *data, uint16_t length);
 bool UART1_DataAvailable(void);
 void UART1_FlushRx(void);
 uint16_t UART1_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
 void UART2_init();
-void UART2_SendFloat(float value);
-void UART2_SendString(const char *str);
-void UART2_SendUInt16(const uint16_t num);
 void UART2_SendBuffer(const uint8_t *data, uint16_t length);
 bool UART2_DataAvailable(void);
 void UART2_FlushRx(void);
 uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
-uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals);
-void UART2_Send_Data(uint16_t a, float b, float c);
-void UART2_Send_Error(void);
 
 #ifdef __cplusplus
 };

@@ -7,6 +7,7 @@
 #include "uart_tx.h"
 #include "modbus_sbs_regs.h"
 #include "modbus_funcs.h"
+#include "esp_comm.h"
 
 //-- Defines ------------------------------------------------------------------
 #define LEDS_MSK  0xF000
@@ -54,32 +55,32 @@ int main(void)
 		  ltime = 0.0f, 
 		  inprate = 0.0f;
     bool success = false;
-	uint16_t nchan = 0;
+	int16_t nchan = 0;
 	static uint32_t spectr[4096] = {};
 
 	while(1) {
 		mtimer_sleep(2);
-		success = MODBUS_ReadUInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
+		success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
 		if (success) {
-			success = MODBUS_ReadSpectrumU32(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr);
+			success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
 			if (success) {
 				success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
 				if (success && ltime > 0.0f) {
 					success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
 					if (success) {
 						adr = DoseRate(spectr, nchan, ltime, inprate, DZ);
-						UART2_Send_Data(nchan, adr, inprate);
+						ESP_SendFormatted("s,f,f", nchan, adr, inprate);
 					} else {
-						UART2_Send_Error();
+						ESP_Send_Error();
 					}
 				} else {
-					UART2_Send_Error();
+					ESP_Send_Error();
 				}	
 			} else {
-				UART2_Send_Error();
+				ESP_Send_Error();
 			}	
 		} else {
-			UART2_Send_Error();
+			ESP_Send_Error();
 		}
 	}
 	

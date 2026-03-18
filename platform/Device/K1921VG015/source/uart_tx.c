@@ -4,9 +4,6 @@
 #include "plib015_uart.h"
 #include "uart_tx.h"
 
-#define UART_BAUD 115200
-
-
 //=======================UART1 FUNCSET===========================//
 
 void UART1_init()
@@ -44,34 +41,6 @@ void UART1_init()
     UART_Init(UART1, &uart1_config);
     UART_Cmd(UART1, ENABLE);
     UART_ErrorStatusClear(UART1, UART_Error_All);
-}
-
-void UART1_SendFloat(float value)
-{
-    FloatBytes_t converter;
-    converter.f = value;
-    
-    for(int i = 0; i < 4; i++) {
-        while(UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET);
-        UART_SendData(UART1, converter.bytes[i]);
-    }
-}
-
-void UART1_SendString(const char *str) 
-{
-    while(*str) {
-        while(UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET);
-        UART_SendData(UART1, *str++);
-    }
-}
-
-void UART1_SendUInt16(const uint16_t num) 
-{
-    while(UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET);
-    UART_SendData(UART1, (uint8_t)(num & 0xFF));  // Младший байт
-
-    while(UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET);
-    UART_SendData(UART1, (uint8_t)((num >> 8) & 0xFF));  // Старший байт
 }
 
 void UART1_SendBuffer(const uint8_t *data, uint16_t length) 
@@ -142,7 +111,6 @@ void UART2_init(void)
     RCU->UARTCLKCFG[2].UARTCLKCFG_bit.RSTDIS = 1;
     RCU->UARTCLKCFG[2].UARTCLKCFG_bit.CLKEN = 1;
 
-    // Заполняем структуру параметров
     UART_Init_TypeDef uart2_config;
     UART_StructInit(&uart2_config);
     
@@ -157,35 +125,6 @@ void UART2_init(void)
     UART_Init(UART2, &uart2_config);
     UART_Cmd(UART2, ENABLE);
     UART_ErrorStatusClear(UART2, UART_Error_All);
-}
-
-void UART2_SendFloat(float value)
-{
-    FloatBytes_t converter;
-    converter.f = value;
-    
-    for (int i = 0; i < 4; i++) {
-        while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET);
-        UART_SendData(UART2, converter.bytes[i]);
-    }
-}
-
-
-void UART2_SendString(const char *str)
-{
-    while (*str) {
-        while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET);
-        UART_SendData(UART2, *str++);
-    }
-}
-
-void UART2_SendUInt16(const uint16_t num)
-{
-    while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET);
-    UART_SendData(UART2, (uint8_t)(num & 0xFF));      
-
-    while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET);
-    UART_SendData(UART2, (uint8_t)((num >> 8) & 0xFF)); 
 }
 
 void UART2_SendBuffer(const uint8_t *data, uint16_t length)
@@ -220,13 +159,10 @@ uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
         if (UART2_DataAvailable()) {
             buffer[received++] = UART_RecieveData(UART2);
             last_byte_time = mtimer_get_raw_time();
-            
-            // Если превышен общий таймаут – выходим
             if ((mtimer_get_raw_time() - start_time) > timeout_clocks) {
                 break;
             }
         } else {
-            // Если данных нет дольше interchar_ms – выходим
             if ((mtimer_get_raw_time() - last_byte_time) > interchar_clocks) {
                 break;
             }
@@ -234,87 +170,4 @@ uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
     }
     
     return received;
-}
-
-uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals)
-{
-    if (value < 0) {
-        buffer[idx++] = '-';
-        value = -value;
-    }
-
-    // Масштабируем до целого числа с округлением
-    uint32_t factor = 1;
-    for (uint8_t i = 0; i < decimals; i++) factor *= 10;
-    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
-
-    uint32_t int_part = scaled / factor;
-    uint32_t frac_part = scaled % factor;
-
-    // Вывод целой части
-    uint8_t temp[16];
-    uint8_t j = 0;
-    if (int_part == 0) {
-        temp[j++] = '0';
-    } else {
-        uint32_t num = int_part;
-        while (num > 0) {
-            temp[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-    }
-    while (j > 0) {
-        buffer[idx++] = temp[--j];
-    }
-
-    buffer[idx++] = '.';
-
-    // Вывод дробной части с ведущими нулями
-    uint32_t frac = frac_part;
-    uint32_t divisor = factor / 10;
-    for (uint8_t d = 0; d < decimals; d++) {
-        buffer[idx++] = '0' + (frac / divisor);
-        frac %= divisor;
-        divisor /= 10;
-    }
-
-    return idx;
-}
-
-void UART2_Send_Data(uint16_t a, float b, float c)
-{
-    uint8_t buffer[64];
-    uint8_t i = 0;
-
-    if (a == 0) {
-        buffer[i++] = '0';
-    } else {
-        uint8_t rev[8];
-        uint8_t j = 0;
-        uint16_t num = a;
-        while (num > 0) {
-            rev[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-        while (j > 0) {
-            buffer[i++] = rev[--j];
-        }
-    }
-
-    buffer[i++] = ',';
-    i = append_float(buffer, i, b, 3);
-
-    buffer[i++] = ',';
-    i = append_float(buffer, i, c, 3);
-
-    buffer[i++] = '\r';
-    buffer[i++] = '\n';
-
-    UART2_SendBuffer(buffer, i);
-}
-
-void UART2_Send_Error(void)
-{
-    uint8_t buffer[] = "ERROR\r\n";
-    UART2_SendBuffer(buffer, sizeof(buffer) - 1);
 }
