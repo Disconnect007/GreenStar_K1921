@@ -43,25 +43,7 @@ void check()
 	GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
-float DoseRate_Dz(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
-{
-	float dose = 0.0f;
-	for(uint16_t i = 0; i < nchannels; i++) {
-		dose += (float)spectr[i] * i;
-	}
-	dose = dose * Dz / ltime;
-	return dose;
-}
-
-float DoseRate_Inprate(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz)
-{
-	float dose = 0.0f;
-	for(uint16_t i = 0; i < nchannels; i++) {
-		dose += (float)spectr[i] * i;
-	}
-	dose = dose * inprate * Dz / (ltime * 640.0f);
-	return dose;
-}
+float DoseRate(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz);
 
 //-- Main ----------------------------------------------------------------------
 int main(void) 
@@ -85,7 +67,7 @@ int main(void)
 				if (success && ltime > 0.0f) {
 					success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
 					if (success) {
-						adr = DoseRate_Inprate(spectr, nchan, ltime, inprate, DZ);
+						adr = DoseRate(spectr, nchan, ltime, inprate, DZ);
 						UART2_Send_Data(nchan, adr, inprate);
 					} else {
 						UART2_Send_Error();
@@ -102,4 +84,14 @@ int main(void)
 	}
 	
 	return 0;
+}
+
+float DoseRate(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz)
+{
+	float dose = 0.0f;
+	for(uint16_t i = 0; i < nchannels; i++) {
+		dose += (float)spectr[i] * i;
+	}
+	dose = dose * inprate * Dz / (ltime * 640.0f);
+	return dose;
 }
