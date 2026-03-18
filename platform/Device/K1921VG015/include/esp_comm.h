@@ -8,5 +8,6 @@ uint8_t append_int32(uint8_t* buffer, uint8_t idx, int32_t value);
 uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals);
 void ESP_SendFormatted(const char* fmt, ...);
 void ESP_Send_Error(void);
+void ESP_Send_Stop(void);
 
 #endif

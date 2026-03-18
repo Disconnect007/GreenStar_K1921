@@ -97,14 +97,13 @@ void ESP_SendFormatted(const char* fmt, ...)
     uint8_t i = 0;
     va_list args;
     va_start(args, fmt);
-    int first = 1; // флаг первого значения
+    bool first = true;
 
     while (*fmt) {
-        // Перед каждым значением, кроме первого, ставим запятую
         if (!first) {
             buffer[i++] = ',';
         }
-        first = 0;
+        first = false;
 
         switch (*fmt) {
             case 's': // int16_t
@@ -117,9 +116,7 @@ void ESP_SendFormatted(const char* fmt, ...)
                 i = append_float(buffer, i, (float)va_arg(args, double), 3);
                 break;
             default:
-                // Неизвестный символ – пропускаем, но не сбрасываем флаг первого,
-                // чтобы следующая запятая не поставилась. Уменьшаем first обратно.
-                first = 1;
+                first = true;
                 break;
         }
         fmt++;
@@ -134,5 +131,11 @@ void ESP_SendFormatted(const char* fmt, ...)
 void ESP_Send_Error(void)
 {
     uint8_t buffer[] = "ERROR\r\n";
+    UART2_SendBuffer(buffer, sizeof(buffer) - 1);
+}
+
+void ESP_Send_Stop(void)
+{
+    uint8_t buffer[] = "STOP\r\n";
     UART2_SendBuffer(buffer, sizeof(buffer) - 1);
 }
