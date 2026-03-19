@@ -112,8 +112,8 @@ void ESP_SendFormatted(const char* fmt, ...)
             case 'i': // int32_t
                 i = append_int32(buffer, i, va_arg(args, int32_t));
                 break;
-            case 'f': // float (3 знака)
-                i = append_float(buffer, i, (float)va_arg(args, double), 3);
+            case 'f': // float (2 знака)
+                i = append_float(buffer, i, (float)va_arg(args, double), 2);
                 break;
             default:
                 first = true;

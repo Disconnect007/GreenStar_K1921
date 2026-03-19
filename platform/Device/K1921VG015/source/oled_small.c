@@ -304,3 +304,50 @@ void OLED_print_ru_letter(uint8_t index, bool inverted)
     OLED_setline((line + scroll) & 0x07);
   }
 }
+
+// float value symbol length for positioning
+size_t float_num_len(float value, uint8_t decimals)
+{
+    uint8_t buffer[16] = {};
+    uint8_t i = 0;
+    if (value < 0) {
+        buffer[i] = '-';
+        value = -value;
+    }
+
+    uint32_t factor = 1;
+    for (uint8_t i = 0; i < decimals; i++) factor *= 10;
+    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
+
+    uint32_t int_part = scaled / factor;
+    uint32_t frac_part = scaled % factor;
+
+    uint8_t temp[16];
+    uint8_t j = 0;
+    if (int_part == 0) {
+        temp[j++] = '0';
+    } else {
+        uint32_t num = int_part;
+        while (num > 0) {
+            temp[j++] = '0' + (num % 10);
+            num /= 10;
+        }
+    }
+    while (j > 0) {
+        buffer[i++] = temp[--j];
+    }
+
+    buffer[i++] = '.';
+
+    uint32_t divisor = factor / 10;
+    uint32_t frac = frac_part;
+    for (uint8_t d = 0; d < decimals; d++) {
+        buffer[i++] = '0' + (frac / divisor);
+        frac %= divisor;
+        divisor /= 10;
+    }
+
+    buffer[i++] = '\0';
+
+    return strlen(buffer);
+}

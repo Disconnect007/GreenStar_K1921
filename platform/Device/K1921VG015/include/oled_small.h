@@ -6,6 +6,7 @@ extern "C" {
 
 #include "i2c_tx.h"
 #include <stdbool.h>
+#include <string.h>
 #include "bitmaps.h"
 #include "font8x8.h"
 
@@ -65,6 +66,7 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
 void OLED_clearline(uint8_t line);
 void OLED_setline(uint8_t line);
 void OLED_print_ru_letter(uint8_t index, bool inverted);
+size_t float_num_len(float value, uint8_t decimals);
 
 #ifdef __cplusplus
 };

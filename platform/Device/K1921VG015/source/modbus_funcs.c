@@ -142,7 +142,7 @@ bool MODBUS_ReadSpectrum(uint8_t slave_addr, uint16_t start_reg, uint16_t channe
         current_reg += regs_in_block;
         channels_remaining -= channels_in_block;
 
-        if (channels_remaining > 0) mtimer_sleep(2);
+        if (channels_remaining > 0) mtimer_sleep(1);
     }
     return true;
 }

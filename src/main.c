@@ -36,7 +36,7 @@ void periph_init()
 	UART1_init();
 	UART2_init();
 	I2C_init();
-	//OLED_init();
+	OLED_init();
 }
 
 //--- USER FUNCTIONS -----------------------------------------------------------
@@ -57,7 +57,7 @@ int main(void)
     periph_init();
     check();
     
-    float adr = 0.0f, 
+    float ader = 0.0f, 
           ltime = 0.0f, 
           inprate = 0.0f;
 
@@ -68,16 +68,25 @@ int main(void)
     static uint32_t spectr[4096] = {};
     static uint32_t prev_spectr[4096] = {};
     static float prev_ltime = 0.0f;
+    static char aderlen = 0;
+
+    OLED_clear();
+    OLED_setpos(48, 1);
+    OLED_printS("ADER", false);
+    OLED_setpos(52, 4);
+    OLED_printS("N/D", false);
+    OLED_setpos(36, 6);
+    OLED_printS("[uSv/h]", false);
 
     while(1) {
-        mtimer_sleep(2);
+        mtimer_sleep(1);
 
         success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
         if (!success) { ESP_Send_Error(); first_measure = true; continue; }
         
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
         if (!success) { ESP_Send_Error(); first_measure = true; continue; }
-        
+
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
         if (!success || ltime <= 0.0f) { ESP_Send_Error(); first_measure = true; continue; }
         
@@ -86,11 +95,15 @@ int main(void)
 
         if (first_measure) {
             // Первое измерение – мгновенная доза
-            adr = DoseRateInstant(spectr, nchan, ltime, inprate, DZ);
-            ESP_SendFormatted("s,f,f", nchan, adr, inprate);
+            ader = DoseRateInstant(spectr, nchan, ltime, inprate, DZ);
+            ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
             first_measure = false;
+
+            aderlen = float_num_len(ader, 2);
+            OLED_setpos((128 - aderlen * 8) / 2, 4);
+            OLED_printF(ader, 2, false);
         } else {
             float delta_ltime = ltime - prev_ltime;
 
@@ -112,15 +125,19 @@ int main(void)
             }
 
             // Дифференциальный расчёт
-            float dose_diff = 0.0f;
+            uint32_t dose_diff = 0;
             for (uint16_t i = 0; i < nchan; i++) {
                 uint32_t diff = spectr[i] - prev_spectr[i];
-                dose_diff += (float)diff * i;
+                dose_diff += diff * i;
             }
-            adr = dose_diff * DZ / delta_ltime;
-            ESP_SendFormatted("s,f,f", nchan, adr, inprate);
+            ader = ((float)dose_diff * DZ) / (delta_ltime * 1.6f);
+            ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
+
+            aderlen = float_num_len(ader, 2);
+            OLED_setpos((128 - aderlen * 8) / 2, 4);
+            OLED_printF(ader, 2, false);
         }
     }
     return 0;
@@ -128,10 +145,10 @@ int main(void)
 
 float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz)
 {
-    float dose = 0.0f;
+    uint32_t summ = 0;
     for(uint16_t i = 0; i < nchannels; i++) {
-        dose += (float)spectr[i] * i;
+        summ += spectr[i] * i;
     }
-    dose = dose * inprate * Dz / (ltime * 640.0f);
-    return dose;
+    float dose_rate= ((float)summ * Dz) / (ltime * 1.6f);
+    return dose_rate;
 }
