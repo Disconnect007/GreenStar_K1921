@@ -8,8 +8,8 @@ union FloatConverter{
     float f32;
 };
 
-// Формирование Modbus запроса
-uint8_t modbus_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf)
+// Формирование Modbus запроса на чтение регистров
+uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf)
 {
     tx_buf[0] = addr;
     tx_buf[1] = code;
@@ -25,24 +25,47 @@ uint8_t modbus_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t r
     return 8;
 }
 
-// Запрос на чтение holding регистров
-uint8_t modbus_read_holding_request(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *tx_buf)
+// Формирование Modbus запроса на запись 1-го регистра
+uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
 {
-    return modbus_request(slave_addr, 0x03, reg_addr, num_registers, tx_buf);
+    tx_buf[0] = addr;
+    tx_buf[1] = code;
+    tx_buf[2] = Hi(reg_addr);
+    tx_buf[3] = Low(reg_addr);
+    tx_buf[4] = Hi(write_data);
+    tx_buf[5] = Low(write_data);
+
+    uint16_t crc = modbus_crc16(tx_buf, 6);
+    tx_buf[6] = Low(crc);
+    tx_buf[7] = Hi(crc);
+
+    return 8;
+}
+
+// Запрос на чтение holding регистров
+uint8_t modbus_read_holding(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *tx_buf)
+{
+    return modbus_read_holding_request(slave_addr, 0x03, reg_addr, num_registers, tx_buf);
+}
+
+// Запрос на запись 1-го регистра
+uint8_t modbus_write_single_reg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
+{
+    return modbus_write_single_reg_request(slave_addr, 0x06, reg_addr, write_data, tx_buf);
 }
 
 // Чтение блока регистров (до 120 регистров)
 bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *data)
 {
-    uint8_t tx_buffer[8];
-    uint8_t rx_buffer[5 + MODBUS_MAX_BYTES_PER_READ + 2];
+    uint8_t tx_buffer[8] = {},
+            rx_buffer[5 + MODBUS_MAX_BYTES_PER_READ + 2] = {};
     uint16_t rx_len;
     uint16_t expected_bytes;
 
     if (num_registers < 1 || num_registers > MODBUS_MAX_REGISTERS_PER_READ) return false;
     expected_bytes = num_registers * 2;
 
-    uint8_t tx_len = modbus_read_holding_request(slave_addr, reg_addr, num_registers, tx_buffer);
+    uint8_t tx_len = modbus_read_holding(slave_addr, reg_addr, num_registers, tx_buffer);
 
     for (uint8_t retry = 0; retry < MODBUS_MAX_RETRIES; retry++) {
         UART1_FlushRx();
@@ -64,6 +87,33 @@ bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_
     }
     return false;
 }
+
+// Запись 1-го регистра
+bool MODBUS_WriteSingleReg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data)
+{
+    uint8_t tx_buffer[8] = {}, 
+            rx_buffer[8] = {};
+    uint8_t rx_len;
+
+    uint8_t tx_len = modbus_write_single_reg(slave_addr, reg_addr, write_data, tx_buffer);
+
+    for (uint8_t retry = 0; retry < MODBUS_MAX_RETRIES; retry++) {
+        UART1_FlushRx();
+        UART1_SendBuffer(tx_buffer, tx_len);
+        rx_len = UART1_ReceiveBuffer(rx_buffer, sizeof(rx_buffer), MODBUS_TIMEOUT_MS, MODBUS_INTERCHAR_MS);
+
+        if (rx_len != tx_len) continue;
+        if (rx_buffer[0] != slave_addr || rx_buffer[1] != 0x06) continue;
+
+        uint16_t received_crc = (rx_buffer[rx_len - 1] << 8) | rx_buffer[rx_len - 2];
+        uint16_t calculated_crc = modbus_crc16(rx_buffer, rx_len - 2);
+        if (received_crc != calculated_crc) continue;
+
+        return true;
+    }
+    return false;
+}
+
 
 // Преобразование 4 bytes big-endian для little-endian
 static uint32_t modbus_bytes_reorder(const uint8_t bytes[4])
