@@ -71,7 +71,7 @@ void check()
 	GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz);
+float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz);
 
 //-- Main ----------------------------------------------------------------------
 volatile uint16_t nch = 128;
@@ -130,7 +130,7 @@ int main(void)
 
         if (first_measure) {
             // Первое измерение – мгновенная доза
-            ader = DoseRateInstant(spectr, nchan, ltime, inprate, DZ);
+            ader = DoseRateInstant(spectr, nchan, ltime, DZ);
             ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
@@ -180,7 +180,7 @@ int main(void)
     return 0;
 }
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float inprate, float Dz)
+float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
 {
     uint32_t summ = 0;
     for(uint16_t i = 0; i < nchannels; i++) {
