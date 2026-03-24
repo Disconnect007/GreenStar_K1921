@@ -105,6 +105,8 @@ int main(void)
     OLED_setpos(36, 6);
     OLED_printS("[uSv/h]", false);
 
+    InterruptDisable();
+
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 1); }
     mtimer_sleep(1);
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 0); }
@@ -114,6 +116,7 @@ int main(void)
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 2); }
 
     TMR32_init((SystemCoreClock>>4) * 200);
+    
     InterruptEnable();
     
     while(1) {
