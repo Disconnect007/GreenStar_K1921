@@ -92,9 +92,10 @@ int main(void)
     uint16_t nchan = 0;
     static uint32_t spectr[4096] = {};
     static uint32_t prev_spectr[4096] = {};
-    static uint16_t Knch = 1;
     static float prev_ltime = 0.0f;
     static char aderlen = 0;
+    static float en_k0 = -54.699f;
+    static float en_k1 = 0.808f;
 
     OLED_clear();
     OLED_setpos(48, 1);
@@ -105,11 +106,14 @@ int main(void)
     OLED_printS("[uSv/h]", false);
 
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 1); }
+    mtimer_sleep(1);
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 0); }
+    mtimer_sleep(1);
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_NCHANNELS_REG, 128);} 
+    mtimer_sleep(1);
     while(!success) { success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 2); }
 
-    TMR32_init((SystemCoreClock>>4) * 400);
+    TMR32_init((SystemCoreClock>>4) * 200);
     InterruptEnable();
     
     while(1) {
@@ -160,13 +164,13 @@ int main(void)
             }
 
             // Дифференциальный расчёт
-            uint32_t dose_diff = 0;
+            float spectr_diff = 0.0f;
             for (uint16_t i = 0; i < nchan; i++) {
                 uint32_t diff = spectr[i] - prev_spectr[i];
-                dose_diff += diff * i;
+                float E_kev = en_k0 + en_k1 * i;
+                spectr_diff += (float)diff * E_kev;
             }
-            Knch = 4096 / nchan;
-            ader = ((float)dose_diff * DZ) / (delta_ltime * 1.6f) * (float)Knch;
+            ader = (spectr_diff * DZ) / (delta_ltime);
             ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
@@ -182,12 +186,14 @@ int main(void)
 
 float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, float Dz)
 {
-    uint32_t summ = 0;
+    float en_k0 = -54.699f;
+    float en_k1 = 0.808f;
+    float summ = 0.0f;
     for(uint16_t i = 0; i < nchannels; i++) {
-        summ += spectr[i] * i;
+        float E_kev = en_k0 + en_k1 * i;
+        summ += (float)spectr[i] * E_kev;
     }
-    uint16_t Knch = 4096 / nchannels;
-    float dose_rate= ((float)summ * Dz) / (ltime * 1.6f) * (float)Knch;
+    float dose_rate = (summ * Dz) / (ltime);
     return dose_rate;
 }
 
