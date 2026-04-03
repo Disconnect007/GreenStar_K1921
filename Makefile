@@ -8,6 +8,7 @@ BUILD_DIR = build
 
 C_SOURCES =  \
 	src/main.c \
+	platform/Device/K1921VG015/source/temp.c \
 	platform/Device/K1921VG015/source/i2c_tx.c \
 	platform/Device/K1921VG015/source/oled_small.c \
 	platform/Device/K1921VG015/source/plib015_i2c.c \

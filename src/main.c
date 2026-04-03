@@ -7,6 +7,7 @@
 #include "modbus_sbs_regs.h"
 #include "modbus_funcs.h"
 #include "esp_comm.h"
+#include "temp.h"
 #include <string.h>
 
 #define LEDS_MSK  0xF000
@@ -14,7 +15,7 @@
 #define LED0_MSK  (1 << LED0_PIN)
 
 #define TIME_EPS	  1.0E-5
-#define MIN_DELTA     1.0E-3
+#define MIN_DELTA     1.0E-2
 #define DZ 		      1.0E-6
 
 static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
@@ -38,6 +39,7 @@ void periph_init()
 	UART2_init();
 	I2C_init();
 	OLED_init();
+    adcsar_init(TSENSOR_ISRC_INT);
 }
 
 void check() 
@@ -71,12 +73,16 @@ int main(void)
     int16_t nchan = 0;
 
     OLED_clear();
-    OLED_setpos(48, 1);
-    OLED_printS("ADER", false);
-    OLED_setpos(52, 4);
+    OLED_setpos(40, 1);
+    OLED_printS(" ADER ", true);
+    OLED_setpos(52, 2);
     OLED_printS("N/D", false);
-    OLED_setpos(36, 6);
+    OLED_setpos(36, 3);
     OLED_printS("[uSv/h]", false);
+    OLED_setpos(0, 6);
+    OLED_printS("TEMP:", true);
+    OLED_setpos(96, 6);
+    OLED_printS("[C]", false);
 
     while(1) {
         InterruptDisable();
@@ -128,7 +134,7 @@ int main(void)
             first_measure = false;
 
             aderlen = float_num_len(ader, 2);
-            OLED_setpos((128 - aderlen * 8) / 2, 4);
+            OLED_setpos((128 - aderlen * 8) / 2, 2);
             OLED_printF(ader, 2, false);
         } else {
             float delta_ltime = ltime - prev_ltime;
@@ -167,9 +173,11 @@ int main(void)
             prev_ltime = ltime;
 
             aderlen = float_num_len(ader_f, 2);
-            OLED_setpos((128 - aderlen * 8) / 2, 4);
+            OLED_setpos((128 - aderlen * 8) / 2, 2);
             OLED_printF(ader_f, 2, false);
         }
+        OLED_setpos(48, 6);
+        OLED_printF(Get_Temp_Celsius(), 2, false);
         InterruptEnable();
     }
     return 0;

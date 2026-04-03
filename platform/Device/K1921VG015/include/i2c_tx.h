@@ -9,7 +9,7 @@ extern "C" {
 
 // I2C Parameters
 #ifndef FSFreq
-#define FSFreq           100000    // Standard frequency (Hz)
+#define FSFreq           100000    // Standart frequency (Hz)
 #endif
 
 #ifndef HSFreq  
