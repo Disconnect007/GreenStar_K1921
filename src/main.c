@@ -72,7 +72,7 @@ void check()
 	GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx);
+float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time);
 
 volatile uint16_t nch = 128;
 uint16_t nch_max = 4096;
@@ -149,7 +149,9 @@ int main(void)
         success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
         if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
         
+        uint64_t t_sp_start = mtimer_get_raw_time();
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
+        uint64_t sp_rec_time = mtimer_get_raw_time() - t_sp_start;
         if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
 
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
@@ -185,7 +187,7 @@ int main(void)
 
         if(first_measure) {
             // Первое измерение – мгновенная доза
-            ader = DoseRateInstant(spectr, nchan, ltime, DZ, k_idx);
+            ader = DoseRateInstant(spectr, nchan, ltime, DZ, k_idx, sp_rec_time);
             ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
@@ -240,7 +242,7 @@ int main(void)
         OLED_setpos(48, 5);
         OLED_printD(err_counter, false);
         OLED_setpos(48, 6);
-        OLED_printD(sbs_time - base_sec, false);
+        OLED_printD(sbs_time, false);
 
         uint64_t t_end = mtimer_get_raw_time();
         if (log_index < LOG_SIZE) {
@@ -254,8 +256,9 @@ int main(void)
     return 0;
 }
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx)
+float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time)
 {
+    double delta = (double)sp_rec_time / 16000000.0;
     double enk0 = ENK0[idx];
     double enk1 = ENK1[idx];
     double summ = 0.0;
@@ -263,7 +266,7 @@ float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double
         double E_kev = enk0 + enk1 * i;
         summ += (double)spectr[i] * E_kev;
     }
-    double dose_rate = (summ * Dz) / ltime;
+    double dose_rate = (summ * Dz) / (ltime - delta);
     return (float)dose_rate;
 }
 
