@@ -18,7 +18,33 @@
 #define MIN_DELTA     1.0E-2
 #define DZ 		      1.0E-6
 
-#define LOG_SIZE  200
+#define LOG_SIZE_PER_CHAN  100   // замеров на один режим
+#define NUM_CHAN_MODES     6    // 128,256,512,1024,2048,4096
+#define TOTAL_LOG_ENTRIES (LOG_SIZE_PER_CHAN * NUM_CHAN_MODES)
+
+typedef struct {
+    uint64_t start_ticks;
+    uint64_t end_ticks;
+    uint16_t nchannels;
+    uint16_t reserved;
+} log_entry_t;
+
+log_entry_t log_buffer[TOTAL_LOG_ENTRIES];
+uint16_t log_index = 0;
+uint16_t chan_counts[NUM_CHAN_MODES] = {0};
+volatile bool collection_done = false;
+
+int get_chan_index(uint16_t nch) {
+    switch(nch) {
+        case 128:  return 0;
+        case 256:  return 1;
+        case 512:  return 2;
+        case 1024: return 3;
+        case 2048: return 4;
+        case 4096: return 5;
+        default:   return -1;
+    }
+}
 
 static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
 static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
@@ -33,13 +59,13 @@ void led_init()
 }
 void TMR32_IRQHandler();
 
-void TMR32_init(uint32_t period)
+void TMR32_init(uint32_t period_ms)
 {
   RCU->CGCFGAPB_bit.TMR32EN = 1;
   RCU->RSTDISAPB_bit.TMR32EN = 1;
 
   //Записываем значение периода в CAPCOM[0]
-  TMR32->CAPCOM[0].VAL = period-1;
+  TMR32->CAPCOM[0].VAL = ((SystemCoreClock / 1000) * period_ms)-1;
   //Выбираем режим счета от 0 до значения CAPCOM[0]
   TMR32->CTRL_bit.MODE = 1;
 
@@ -74,18 +100,8 @@ void check()
 
 float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time);
 
-volatile uint16_t nch = 128;
-uint16_t nch_max = 4096;
-
-typedef struct {
-    uint64_t start_ticks;
-    uint64_t end_ticks;
-    uint16_t nchannels;
-    uint16_t reserved;
-} log_entry_t;
-
-log_entry_t log_buffer[LOG_SIZE];
-uint16_t log_index = 0;
+volatile uint16_t nch = 4096;
+uint16_t nch_min = 128;
 
 int main(void) 
 {
@@ -135,7 +151,7 @@ int main(void)
     OLED_setpos(96, 7);
     OLED_printS("[C]", false);
 
-    TMR32_init((SystemCoreClock>>4) * 200);
+    TMR32_init(80000);
     InterruptEnable();
 
     while(1) {
@@ -245,11 +261,29 @@ int main(void)
         OLED_printD(sbs_time, false);
 
         uint64_t t_end = mtimer_get_raw_time();
-        if (log_index < LOG_SIZE) {
-            log_buffer[log_index].start_ticks = t_start;
-            log_buffer[log_index].end_ticks   = t_end;
-            log_buffer[log_index].nchannels   = nchan;
-            log_index++;
+        if (!collection_done) {
+            int idx = get_chan_index(nchan);
+            if (idx >= 0 && chan_counts[idx] < LOG_SIZE_PER_CHAN) {
+                // Записываем замер
+                log_buffer[log_index].start_ticks = t_start;
+                log_buffer[log_index].end_ticks   = t_end;
+                log_buffer[log_index].nchannels   = nchan;
+                log_index++;
+                chan_counts[idx]++;
+        
+                // Проверяем, все ли режимы набрали нужное количество
+                bool all_done = true;
+                for (int i = 0; i < NUM_CHAN_MODES; i++) {
+                    if (chan_counts[i] < LOG_SIZE_PER_CHAN) {
+                        all_done = false;
+                    break;
+                    }
+                }
+                if (all_done) {
+                    collection_done = true;
+                    GPIOA->DATAOUTTGL = LED0_MSK;
+                }
+            }
         }
         InterruptEnable();
     }
@@ -258,7 +292,7 @@ int main(void)
 
 float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time)
 {
-    double delta = (double)sp_rec_time / 16000000.0;
+    double delta = (double)sp_rec_time / (double)SystemCoreClock;
     double enk0 = ENK0[idx];
     double enk1 = ENK1[idx];
     double summ = 0.0;
@@ -275,8 +309,8 @@ void TMR32_IRQHandler()
     InterruptDisable();
     bool success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 1);
     success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 0);
-    nch = nch << 1;
-    if(nch > nch_max) nch = 128;
+    nch = nch >> 1;
+    if(nch < nch_min) nch = 4096;
     success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_NCHANNELS_REG, nch);
     success = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, 2);
     TMR32->IC = 3;

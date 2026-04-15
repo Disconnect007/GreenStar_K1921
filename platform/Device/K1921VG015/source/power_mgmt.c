@@ -36,7 +36,7 @@ void PM_DisableAllPeriph(void) {
     RCU->RSTDISAHB = 0x0;
     RCU->RSTDISAPB = 0x0;
     
-    // Отключаем блоки батарейного домена, которые не нужны
+    // Отключаем блоки батарейного домена
     PMURTC->PMU_VBATPER_FORCE = PMURTC_PMU_VBATPER_FORCE_CMP0PD_Msk |
                                 PMURTC_PMU_VBATPER_FORCE_CMP1PD_Msk |
                                 PMURTC_PMU_VBATPER_FORCE_DACPD_Msk;
@@ -44,13 +44,10 @@ void PM_DisableAllPeriph(void) {
     // HSE отключаем отдельно, если не используется
 }
 
-// Переключение системной частоты на HSE (предполагается, что кварц 16 МГц уже запущен)
+// Переключение системной частоты на HSE
 void PM_SwitchToHSE(void) {
     if (RCU->CLKSTAT_bit.SRC == RCU_SYSCLKCFG_SRC_HSECLK) return;
-    
-    // Переключаемся на HSE
     RCU->SYSCLKCFG = RCU_SYSCLKCFG_SRC_HSECLK << RCU_SYSCLKCFG_SRC_Pos;
-    // Ждём завершения переключения
     uint32_t timeout = 10000;
     while ((RCU->CLKSTAT_bit.SRC != RCU_SYSCLKCFG_SRC_HSECLK) && timeout--) {}
     
@@ -122,12 +119,9 @@ void PM_SetupWakeupTimer(uint32_t period_ms) {
     TMR32->CTRL_bit.MODE = 1; // счёт вверх
     TMR32->IM = 2; // прерывание по совпадению CAPCOM0
     TMR32->CTRL_bit.CLR = 1; // сброс счётчика
-    
-    // Настройка прерывания в PLIC уже должна быть сделана в main()
-    // или вызывающей программе.
 }
 
-// Настройка пробуждения по внешнему выводу WAKEUPx
+// Настройка пробуждения по внешнему выводу AKEUPx
 void PM_SetupWakeupPin(uint8_t pin_num, uint8_t polarity) {
     // pin_num: 0,1,2
     if (pin_num > 2) return;
