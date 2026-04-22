@@ -34,18 +34,6 @@ uint16_t log_index = 0;
 uint16_t chan_counts[NUM_CHAN_MODES] = {0};
 volatile bool collection_done = false;
 
-int get_chan_index(uint16_t nch) {
-    switch(nch) {
-        case 128:  return 0;
-        case 256:  return 1;
-        case 512:  return 2;
-        case 1024: return 3;
-        case 2048: return 4;
-        case 4096: return 5;
-        default:   return -1;
-    }
-}
-
 static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
 static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
 static int8_t k_idx = 0;
@@ -101,21 +89,15 @@ void check()
 float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time);
 
 volatile uint16_t nch = 4096;
-uint16_t nch_min = 128;
+static uint16_t nch_min = 128;
 
 int main(void) 
 {
     periph_init();
     check();
     
-
-    // суточная проверка на ошибки
-    static uint32_t err_counter = 0;
-    static const uint64_t base_sec = 16500;
     static int32_t sbs_time = 0;
-
     static double ader = 0.0;
-
     static float ltime = 0.0, 
                  inprate = 0.0;
 
@@ -138,9 +120,6 @@ int main(void)
     OLED_setpos(36, 3);
     OLED_printS("[uSv/h]", false);
 
-    // суточная проверка на ошибки
-    OLED_setpos(0, 5);
-    OLED_printS("ERRC:", true);
     OLED_setpos(0, 6);
     OLED_printS("TIME:", true);
     OLED_setpos(96, 6);
@@ -151,7 +130,7 @@ int main(void)
     OLED_setpos(96, 7);
     OLED_printS("[C]", false);
 
-    TMR32_init(80000);
+    TMR32_init(15000);
     InterruptEnable();
 
     while(1) {
@@ -160,21 +139,21 @@ int main(void)
 
         // суточная проверка на ошибки
         success = MODBUS_ReadInt32(SBS_ADDR, 0x090F, &sbs_time);
-        if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
+        if (!success) { ESP_Send_Error(); first_measure = true; continue; }
 
         success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
-        if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
+        if (!success) { ESP_Send_Error(); first_measure = true; continue; }
         
         uint64_t t_sp_start = mtimer_get_raw_time();
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
         uint64_t sp_rec_time = mtimer_get_raw_time() - t_sp_start;
-        if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
+        if (!success) { ESP_Send_Error(); first_measure = true; continue; }
 
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
-        if (!success || ltime <= 0.0f) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
+        if (!success || ltime <= 0.0f) { ESP_Send_Error(); first_measure = true; continue; }
         
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
-        if (!success) { ESP_Send_Error(); err_counter++; first_measure = true; continue; }
+        if (!success) { ESP_Send_Error(); first_measure = true; continue; }
 
         switch(nchan) {
             case 128: 
@@ -253,25 +232,21 @@ int main(void)
             OLED_setpos((128 - aderlen * 8) / 2, 2);
             OLED_printF(ader_f, 2, false);
         }
+
         OLED_setpos(48, 7);
         OLED_printF(Get_Temp_Celsius(), 2, false);
-        OLED_setpos(48, 5);
-        OLED_printD(err_counter, false);
         OLED_setpos(48, 6);
         OLED_printD(sbs_time, false);
 
         uint64_t t_end = mtimer_get_raw_time();
         if (!collection_done) {
-            int idx = get_chan_index(nchan);
-            if (idx >= 0 && chan_counts[idx] < LOG_SIZE_PER_CHAN) {
-                // Записываем замер
+            if (k_idx >= 0 && chan_counts[k_idx] < LOG_SIZE_PER_CHAN) {
                 log_buffer[log_index].start_ticks = t_start;
                 log_buffer[log_index].end_ticks   = t_end;
                 log_buffer[log_index].nchannels   = nchan;
                 log_index++;
-                chan_counts[idx]++;
-        
-                // Проверяем, все ли режимы набрали нужное количество
+                chan_counts[k_idx]++;
+
                 bool all_done = true;
                 for (int i = 0; i < NUM_CHAN_MODES; i++) {
                     if (chan_counts[i] < LOG_SIZE_PER_CHAN) {
