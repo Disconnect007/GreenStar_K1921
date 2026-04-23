@@ -35,6 +35,82 @@ const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
 // OLED global variables
 uint8_t line, column, scroll;
 
+typedef struct {
+    uint16_t unicode;
+    uint8_t  cp437;
+} unicode_to_cp437_entry_t;
+
+static const unicode_to_cp437_entry_t unicode_to_cp437_table[] = {
+    // Заглавные
+    {0x0410, 0x80}, // А
+    {0x0411, 0x81}, // Б
+    {0x0412, 0x82}, // В
+    {0x0413, 0x83}, // Г
+    {0x0414, 0x84}, // Д
+    {0x0415, 0x85}, // Е
+    {0x0416, 0x86}, // Ж
+    {0x0417, 0x87}, // З
+    {0x0418, 0x88}, // И
+    {0x0419, 0x89}, // Й
+    {0x041A, 0x8A}, // К
+    {0x041B, 0x8B}, // Л
+    {0x041C, 0x8C}, // М
+    {0x041D, 0x8D}, // Н
+    {0x041E, 0x8E}, // О
+    {0x041F, 0x8F}, // П
+    {0x0420, 0x90}, // Р
+    {0x0421, 0x91}, // С
+    {0x0422, 0x92}, // Т
+    {0x0423, 0x93}, // У
+    {0x0424, 0x94}, // Ф
+    {0x0425, 0x95}, // Х
+    {0x0426, 0x96}, // Ц
+    {0x0427, 0x97}, // Ч
+    {0x0428, 0x98}, // Ш
+    {0x0429, 0x99}, // Щ
+    {0x042A, 0x9A}, // Ъ
+    {0x042B, 0x9B}, // Ы
+    {0x042C, 0x9C}, // Ь
+    {0x042D, 0x9D}, // Э
+    {0x042E, 0x9E}, // Ю
+    {0x042F, 0x9F}, // Я
+    {0x0401, 0xF0}, // Ё
+    // Строчные
+    {0x0430, 0xA0}, // а
+    {0x0431, 0xA1}, // б
+    {0x0432, 0xA2}, // в
+    {0x0433, 0xA3}, // г
+    {0x0434, 0xA4}, // д
+    {0x0435, 0xA5}, // е
+    {0x0436, 0xA6}, // ж
+    {0x0437, 0xA7}, // з
+    {0x0438, 0xA8}, // и
+    {0x0439, 0xA9}, // й
+    {0x043A, 0xAA}, // к
+    {0x043B, 0xAB}, // л
+    {0x043C, 0xAC}, // м
+    {0x043D, 0xAD}, // н
+    {0x043E, 0xAE}, // о
+    {0x043F, 0xAF}, // п
+    {0x0440, 0xE0}, // р
+    {0x0441, 0xE1}, // с
+    {0x0442, 0xE2}, // т
+    {0x0443, 0xE3}, // у
+    {0x0444, 0xE4}, // ф
+    {0x0445, 0xE5}, // х
+    {0x0446, 0xE6}, // ц
+    {0x0447, 0xE7}, // ч
+    {0x0448, 0xE8}, // ш
+    {0x0449, 0xE9}, // щ
+    {0x044A, 0xEA}, // ъ
+    {0x044B, 0xEB}, // ы
+    {0x044C, 0xEC}, // ь
+    {0x044D, 0xED}, // э
+    {0x044E, 0xEE}, // ю
+    {0x044F, 0xEF}, // я
+    {0x0451, 0xF1}, // ё
+};
+
 // OLED set cursor to line start
 void OLED_setline(uint8_t line) 
 {
@@ -100,37 +176,58 @@ void OLED_init(void)
   OLED_setpos(0,0);
 }
 
+uint8_t utf8_to_cp437(const char **p) {
+    uint8_t c = (uint8_t)**p;
+    if (c < 0x80) {
+        (*p)++; 
+        return c;
+    }
+  
+    if ((c & 0xE0) == 0xC0) {
+        uint8_t c2 = (uint8_t)*(*p + 1);
+        uint16_t unicode = ((c & 0x1F) << 6) | (c2 & 0x3F);
+  
+        for (size_t i = 0; i < sizeof(unicode_to_cp437_table)/sizeof(unicode_to_cp437_table[0]); i++) {
+            if (unicode_to_cp437_table[i].unicode == unicode) {
+                *p += 2;
+                return unicode_to_cp437_table[i].cp437;
+            }
+        }
+        (*p)++; 
+        return '?';
+    }
+
+    if ((c & 0xF0) == 0xE0) { *p += 3; }
+    else if ((c & 0xF8) == 0xF0) { *p += 4; }
+    else { (*p)++; }
+    return '?';
+}
 // OLED plot a single character
-void OLED_plotChar(char c, bool inverted) 
+void OLED_plotChar(uint8_t c, bool inverted) 
 {
+  const uint8_t *glyph = ibm8x8_font_cp437[c];
   I2C_start(OLED_ADDR);
   I2C_write(OLED_DAT_MODE);
-  for(short i = 0 ; i != 8; i++) {
-    I2C_write(inverted ? ~(font8x8[c-32][i]) : font8x8[c-32][i]);
+  for (short i = 0; i < 8; i++) {
+    I2C_write(inverted ? ~glyph[i] : glyph[i]);
   }
-  I2C_write(inverted ? ~0x00 : 0x00); 
+  I2C_write(inverted ? ~0x00 : 0x00);
   I2C_stop();
 }
 
 // OLED write a character or handle control characters
-void OLED_write(char c, bool inverted) 
+void OLED_write(uint8_t c, bool inverted) 
 {
-  c = c & 0x7F;                           // ignore top bit
-  // normal character
-  if(c >= 32) {
-    OLED_plotChar(c, inverted);
-  }
-  // new line
-  else if(c == '\n') {
+  if(c == '\n') {
     column = 0;
     if(line != 7) line++;
     OLED_setline((line + scroll) & 0x07);
   }
-  // carriage return
   else if(c == '\r') {
     column = 0;
     OLED_setline((line + scroll) & 0x07);
   }
+  OLED_plotChar(c, inverted);
 }
 
 // OLED print string
@@ -142,10 +239,11 @@ void OLED_print(char* str)
 }
 
 // OLED print string
-void OLED_printS(char* str, bool inverted) 
+void OLED_printS(const char* str, bool inverted) 
 {
-  while(*str) {
-    OLED_write(*str++, inverted);
+  while (*str) {
+    uint8_t cp437 = utf8_to_cp437(&str);
+    OLED_write(cp437, inverted);
   }
 }
 
@@ -281,27 +379,6 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
 			z++;
 		}
     I2C_stop();
-  }
-}
-
-
-void OLED_print_ru_letter(uint8_t index, bool inverted) 
-{
-  if(index >= 4) return; 
-  I2C_start(OLED_ADDR);
-  I2C_write(OLED_DAT_MODE);
-    
-  for(uint8_t i = 0; i < 8; i++) {
-        I2C_write(inverted ? ~MAED[index][i] : MAED[index][i]);
-  }
-  I2C_write(inverted ? ~0x00 : 0x00); 
-  I2C_stop();
-    
-  column += 9;
-  if(column >= 128) {
-    column = 0;
-    if(line != 7) line++;
-    OLED_setline((line + scroll) & 0x07);
   }
 }
 

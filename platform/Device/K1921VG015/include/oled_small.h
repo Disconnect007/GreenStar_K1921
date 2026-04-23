@@ -50,9 +50,9 @@ extern "C" {
 // OLED functions
 void OLED_init(void);                       		// OLED init function
 void OLED_clear(void);                      		// OLED clear screen
-void OLED_write(char c, bool inverted);     		// OLED write a character or handle control characters
+void OLED_write(uint8_t c, bool inverted);     		// OLED write a character or handle control characters
 void OLED_print(char* str);                 		// OLED print string
-void OLED_printS(char* str, bool inverted); 		// OLED print string
+void OLED_printS(const char* str, bool inverted); 		// OLED print string
 void OLED_println(char* str, bool inverted);        // OLED print string with newline
 void OLED_printD(uint32_t value, bool inverted);    // Print decimal value
 void OLED_printF(float value, uint8_t precision, bool inverted);       // Print float value with custom precision (max = 6)
@@ -65,7 +65,6 @@ void OLED_fill(uint8_t p);                  		// Fill OLED with a character
 void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted); // Draw a bitmap
 void OLED_clearline(uint8_t line);
 void OLED_setline(uint8_t line);
-void OLED_print_ru_letter(uint8_t index, bool inverted);
 size_t float_num_len(float value, uint8_t decimals);
 
 #ifdef __cplusplus

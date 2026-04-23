@@ -126,7 +126,7 @@ int main(void)
     OLED_printS("[S]", false);
 
     OLED_setpos(0, 7);
-    OLED_printS("TEMP:", true);
+    OLED_printS("ЖОПА:", true);
     OLED_setpos(96, 7);
     OLED_printS("[C]", false);
 
