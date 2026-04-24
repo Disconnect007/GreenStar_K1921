@@ -211,7 +211,7 @@ void OLED_plotChar(uint8_t c, bool inverted)
   for (short i = 0; i < 8; i++) {
     I2C_write(inverted ? ~glyph[i] : glyph[i]);
   }
-  I2C_write(inverted ? ~0x00 : 0x00);
+  //I2C_write(inverted ? ~0x00 : 0x00);
   I2C_stop();
 }
 

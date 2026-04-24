@@ -21,9 +21,9 @@ C_SOURCES =  \
 	platform/Device/K1921VG015/source/plic.c \
 	platform/Device/K1921VG015/source/sys_init.c \
 	platform/Device/K1921VG015/source/system_k1921vg015.c \
-	platform/Device/K1921VG015/source/esp_comm.c
+	platform/Device/K1921VG015/source/esp_comm.c 
 
-# Неактивные сурсы	platform/Device/K1921VG015/source/i2c_tx.c platform/Device/K1921VG015/source/oled_small.c platform/Device/K1921VG015/source/plib015_i2c.c platform/retarget/Template/K1921VG015/retarget.c \
+# Неактивные сурсы	platform/Device/K1921VG015/source/i2c_tx.c platform/Device/K1921VG015/source/oled_small.c platform/Device/K1921VG015/source/plib015_i2c.c platform/retarget/Template/K1921VG015/retarget.c platform/Device/K1921VG015/source/power_mgmt.c 
 
 ASM_SOURCES =  \
 	platform/Device/K1921VG015/source/startup_k1921vg015.S
@@ -49,7 +49,7 @@ C_INCLUDES =  \
 	-I. \
 	-Isrc \
 	-Iplatform/Device/K1921VG015/include \
-	-Iplatform/retarget/Template/K1921VG015
+	-Iplatform/retarget/Template/K1921VG015 
 
 ASFLAGS = $(MCU) $(OPT) -MMD -MP -MF"$(@:%.o=%.d)"
 
