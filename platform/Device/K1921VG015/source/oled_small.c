@@ -109,6 +109,7 @@ static const unicode_to_cp437_entry_t unicode_to_cp437_table[] = {
     {0x044E, 0xEE}, // ю
     {0x044F, 0xEF}, // я
     {0x0451, 0xF1}, // ё
+    {0x00B0, 0xF8},  // знак градуса
 };
 
 // OLED set cursor to line start

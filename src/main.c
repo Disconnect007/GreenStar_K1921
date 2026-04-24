@@ -20,8 +20,10 @@
 #define MIN_DELTA   1.0E-2
 #define DZ          1.0E-6
 
-static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
-static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
+//static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
+//static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
+static double ENK0[6] = {-240.0, -120.0, -60.0, -30.0, -15.0, -7.5};
+static double ENK1[6] = {24.0, 12.0, 6.0, 3.0, 1.5, 0.75};
 static int8_t k_idx = 0;
 
 volatile bool tmr_trigger = false;
@@ -105,7 +107,7 @@ int main(void)
     static uint32_t prev_spectr[4096] = {};
     static double prev_ltime = 0.0;
     static char aderlen = 0;
-    static char err = 0;
+    static char err = 3;
     int16_t nchan = 0;
 
     OLED_clear();
@@ -115,14 +117,16 @@ int main(void)
     OLED_printS("Н/Д", false);
     OLED_setpos(32, 3);
     OLED_printS("[мкЗв/ч]", false);
-    OLED_setpos(0, 6);
-    OLED_printS("СТАТУС:", true);
+    OLED_setpos(0, 5);
+    OLED_printS("СТАТУС:", false);
+    OLED_setpos(88, 5);
+    OLED_printS(" Н/Д ", true);
     OLED_setpos(0, 7);
-    OLED_printS("ТЕМП:", true);
-    OLED_setpos(104, 7);
-    OLED_printS("[C]", false);
+    OLED_printS("ТЕМП:", false);
+    OLED_setpos(96, 7);
+    OLED_printS("[°С]", false);
 
-    TMR32_init(2500);
+    TMR32_init(3000);
     InterruptEnable();
 
     while(1)
@@ -131,34 +135,45 @@ int main(void)
             InterruptDisable();
             if (!tmr_trigger) {
                 InterruptEnable();
-                __asm volatile ("WFI");              // просто ждём прерывания
+                __asm volatile ("WFI");
+                __asm("NOP");
+		        __asm("NOP");
+		        __asm("NOP");
             } else {
                 InterruptEnable();
             }
         }
         tmr_trigger = false;
 
-        OLED_setpos(48, 7);
-        OLED_printF(Get_Temp_Celsius(), 2, false);
+        OLED_setpos(38, 7);
+        OLED_printS(" ", true);
+        OLED_printF(Get_Temp_Celsius(), 2, true);
+        OLED_printS(" ", true);
 
         switch(err) {
+            case 0:
+                OLED_setpos(64, 5);
+                OLED_printS("        ", false);
+                OLED_setpos(72, 5);
+                OLED_printS(" НОРМА ", true);
+                break;
             case 1: 
-                OLED_setpos(80, 6);
-                OLED_printS("      ", false);
-                OLED_setpos(80, 6);
-                OLED_printS("ОШИБКА", false);
+                OLED_setpos(64, 5);
+                OLED_printS("        ", false);
+                OLED_setpos(64, 5);
+                OLED_printS(" ОШИБКА ", true);
                 break;
             case 2:
-                OLED_setpos(80, 6);
-                OLED_printS("      ", false);
-                OLED_setpos(96, 6);
-                OLED_printS("СТОП", false);
+                OLED_setpos(64, 5);
+                OLED_printS("        ", false);
+                OLED_setpos(80, 5);
+                OLED_printS(" СТОП ", true);
                 break;
             default:
-                OLED_setpos(80, 6);
-                OLED_printS("      ", false);
-                OLED_setpos(88, 6);
-                OLED_printS("НОРМА", false);
+                OLED_setpos(64, 5);
+                OLED_printS("        ", false);
+                OLED_setpos(88, 5);
+                OLED_printS(" Н/Д ", true);
                 break;
         }
 
@@ -218,6 +233,7 @@ int main(void)
 
         if(first_measure) {
             ader = DoseRateInstant(spectr, nchan, ltime, DZ, k_idx, sp_rec_time);
+            if (ader < 0) {IWDT_Reset(); continue;}
             ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
