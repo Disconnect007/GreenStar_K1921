@@ -1,5 +1,5 @@
 // ===================================================================================
-// Basic I2C Master Functions for K1921VG015 (write only)                     * v1.0 *
+// Basic I2C Master Functions for K1921VG015 (write only)                     
 // ===================================================================================
 
 #include <K1921VG015.h>
@@ -25,8 +25,8 @@ void I2C_init(void)
     
     I2C_Cmd(DISABLE); // Отключаем I2C перед настройкой
 
-    I2C_FSFreqConfig(FSFreq, SystemCoreClock);  // Standard Mode (100 кГц)
-    I2C_HSFreqConfig(HSFreq, SystemCoreClock);   // High Speed Mode (400 кГц)
+    I2C_FSFreqConfig(FSFreq, SystemCoreClock);
+    I2C_HSFreqConfig(HSFreq, SystemCoreClock);
     
     I2C_Cmd(ENABLE); // Включение модуля I2C
     I2C_ITCmd(ENABLE); // Включение прерываний
@@ -34,22 +34,32 @@ void I2C_init(void)
     mtimer_sleep(1);
 }
 
-
 void I2C_start(uint8_t addr) 
 {
-    while (I2C_BusBusyStatus() == SET); // Ждем освобождения шины
+    uint64_t timeout;
 
-    I2C_StartCmd(); // Генерируем START
-    while (I2C_GetState() != I2C_State_STDONE);
-    I2C_SetData(addr); // Отправляем адрес (бит R/W = 0 для записи)
-    I2C_ITStatusClear(); // Сбрасываем флаг INT - это запускает передачу адреса
+    timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(I2C_TIMEOUT_BUS_FREE_US);
+    while (I2C_BusBusyStatus() == SET) {
+        if (mtimer_get_raw_time() >= timeout) return;
+    }
+
+    I2C_StartCmd();
+    timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(I2C_TIMEOUT_STATE_US);
+    while (I2C_GetState() != I2C_State_STDONE) {
+        if (mtimer_get_raw_time() >= timeout) return;
+    }
+
+    I2C_SetData(addr);
+    I2C_ITStatusClear();
     I2C_ITCmd(ENABLE);
-   
+
+    timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(I2C_TIMEOUT_STATE_US);
     while (1) {
         I2C_State_TypeDef state = I2C_GetState();
         if (state == I2C_State_MTADPA) break;     // ACK
-        if (state == I2C_State_MTADNA) return;    // Ошибка (NACK)
+        if (state == I2C_State_MTADNA) return;    // NACK
         if (state == I2C_State_BERROR) return;    // Ошибка шины
+        if (mtimer_get_raw_time() >= timeout) return;
     }
 }
 
@@ -62,10 +72,12 @@ void I2C_write(uint8_t data)
     I2C_ITStatusClear();
     I2C_ITCmd(ENABLE);
 
+    uint64_t timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(I2C_TIMEOUT_STATE_US);
     while (1) {
         state = I2C_GetState();
-        if (state == I2C_State_MTDAPA) break;     // Успех (ACK)
-        if (state == I2C_State_MTDANA) break;     // NACK (может быть нормально)
+        if (state == I2C_State_MTDAPA) break;
+        if (state == I2C_State_MTDANA) break;
+        if (mtimer_get_raw_time() >= timeout) return;
     }
 }
 

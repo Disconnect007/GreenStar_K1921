@@ -1,10 +1,7 @@
 #ifndef TEMP_H_
 #define TEMP_H_
 
-#include <K1921VG015.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <system_k1921vg015.h>
 
 #define TSENSOR_ISEL_INT_ENABLE  TSENS->CTRL = 0x12;
 #define TSENSOR_DISABLE TSENS->CTRL = 0x01;

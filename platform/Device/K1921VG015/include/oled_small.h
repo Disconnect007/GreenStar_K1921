@@ -1,14 +1,8 @@
-#pragma once
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "i2c_tx.h"
-#include <stdbool.h>
-#include <string.h>
-#include "bitmaps.h"
-#include "font8x8.h"
 
 // SSD1306 OLED height in pixels
 #ifndef SSD1306_HEIGHT
@@ -51,8 +45,7 @@ extern "C" {
 void OLED_init(void);                       		// OLED init function
 void OLED_clear(void);                      		// OLED clear screen
 void OLED_write(uint8_t c, bool inverted);     		// OLED write a character or handle control characters
-void OLED_print(char* str);                 		// OLED print string
-void OLED_printS(const char* str, bool inverted); 		// OLED print string
+void OLED_printS(char* str, bool inverted); 		// OLED print string
 void OLED_println(char* str, bool inverted);        // OLED print string with newline
 void OLED_printD(uint32_t value, bool inverted);    // Print decimal value
 void OLED_printF(float value, uint8_t precision, bool inverted);       // Print float value with custom precision (max = 6)

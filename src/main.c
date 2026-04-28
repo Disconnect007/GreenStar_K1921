@@ -74,7 +74,7 @@ void periph_init(void)
 {
     SystemInit();
     SystemCoreClockUpdate();
-    IWDT_Init(10000);
+    IWDT_Init(30000);
     led_init();
     UART1_init();
     UART2_init();
@@ -158,6 +158,8 @@ int main(void)
                 OLED_printS(" НОРМА ", true);
                 break;
             case 1: 
+                OLED_setpos(44, 2);
+                OLED_printS(" Н/Д ", false);
                 OLED_setpos(64, 5);
                 OLED_printS("        ", false);
                 OLED_setpos(64, 5);
@@ -193,6 +195,7 @@ int main(void)
             continue; 
         }
         
+        InterruptDisable();
         uint64_t t_sp_start = mtimer_get_raw_time();
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
         uint64_t sp_rec_time = mtimer_get_raw_time() - t_sp_start;
@@ -210,6 +213,7 @@ int main(void)
             err = 1;  
             continue; 
         }
+        InterruptEnable();
         
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
         if (!success) {

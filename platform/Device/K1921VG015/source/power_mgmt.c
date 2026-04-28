@@ -1,4 +1,6 @@
 #include "power_mgmt.h"
+#include <K1921VG015.h>
+#include <system_k1921vg015.h>
 
 // Внутренние вспомогательные функции
 static void PM_WriteWFIEntry(uint32_t ldo0_en, uint32_t ldo1_en,

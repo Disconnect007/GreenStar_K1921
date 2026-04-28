@@ -1,3 +1,8 @@
+#include "i2c_tx.h"
+#include <stdbool.h>
+#include <string.h>
+#include "bitmaps.h"
+#include "font8x8.h"
 #include "oled_small.h"
 
 // OLED initialisation sequence
@@ -32,7 +37,8 @@ const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
 	0x21, 0x00,	0x7f,	// Set Column Address (start,end) 0 - 127
 };
 
-// OLED global variables
+const uint32_t DIVIDER[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+
 uint8_t line, column, scroll;
 
 typedef struct {
@@ -109,46 +115,47 @@ static const unicode_to_cp437_entry_t unicode_to_cp437_table[] = {
     {0x044E, 0xEE}, // ю
     {0x044F, 0xEF}, // я
     {0x0451, 0xF1}, // ё
-    {0x00B0, 0xF8},  // знак градуса
+    // Другие символы
+    {0x00B0, 0xF8},  // Градус Цельсия
 };
 
-// OLED set cursor to line start
+// OLED установить курсор в начало линии (0-7)
 void OLED_setline(uint8_t line) 
 {
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_CMD_MODE);               // set command mode
-  I2C_write(OLED_PAGE + line);            // set line
-  I2C_write(0x00); I2C_write(0x10);       // set column to "0"
-  I2C_stop();                             // stop transmission
+  I2C_start(OLED_ADDR);                   
+  I2C_write(OLED_CMD_MODE);               
+  I2C_write(OLED_PAGE + line);            
+  I2C_write(0x00); I2C_write(0x10);       
+  I2C_stop();                             
 }
 
-// OLED clear line
+// OLED очистить линию
 void OLED_clearline(uint8_t line) 
 {
   uint8_t i;
-  OLED_setline(line);                     // set cursor to line start
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_DAT_MODE);               // set data mode
-  for(i=128; i; i--) {                    // clear the line
+  OLED_setline(line);                     
+  I2C_start(OLED_ADDR);                   
+  I2C_write(OLED_DAT_MODE);               
+  for(i=128; i; i--) {                    
     I2C_write(0x00);
   }     
-  I2C_stop();                             // stop transmission
+  I2C_stop();                             
 }
 
-// OLED clear screen and buffer
+// OLED очистить экран
 void OLED_clear(void) 
 {
   uint16_t i;
-		OLED_setpos(0, 0);                            // set cursor to first digit
-  I2C_start(OLED_ADDR);                           // start transmission to OLED
-  I2C_write(OLED_DAT_MODE);                       // set data mode
-  for(i=128*8; i; i--) {                          // clear screen and buffer
+	OLED_setpos(0, 0);                            
+  I2C_start(OLED_ADDR);                           
+  I2C_write(OLED_DAT_MODE);                       
+  for(i=128*8; i; i--) {                          
     I2C_write(0x00);
     }           
-  I2C_stop();                                     // stop transmission
+  I2C_stop();                                     
 }
 
-// OLED clear the top line, then scroll the display up by one line
+// OLED прокрутка 
 void OLED_scrollDisplay(void) 
 {
   OLED_clearline(scroll);                 // clear line
@@ -160,24 +167,24 @@ void OLED_scrollDisplay(void)
   I2C_stop();                             // stop transmission
 }
 
-// OLED init function
+// OLED инициализация
 void OLED_init(void) 
 {
   uint8_t i;
-  I2C_init();                             // initialize I2C first
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_CMD_MODE);               // set command mode
+  I2C_init();                             
+  I2C_start(OLED_ADDR);                   
+  I2C_write(OLED_CMD_MODE);               
   for(i = 0; i < sizeof(ssd1306_init_sequence); i++)
-    I2C_write(ssd1306_init_sequence[i]);          // send the command bytes
-  I2C_stop();                             // stop transmission
-  scroll = 0;                             // start with zero scroll
+    I2C_write(ssd1306_init_sequence[i]);          
+  I2C_stop();                             
+  scroll = 0;                             
   column = 0;
   line = 0; 
-  OLED_clear();                           // clear screen
+  OLED_clear();                           
   OLED_setpos(0,0);
 }
 
-uint8_t utf8_to_cp437(const char **p) {
+uint8_t utf8_to_cp437(char **p) {
     uint8_t c = (uint8_t)**p;
     if (c < 0x80) {
         (*p)++; 
@@ -203,7 +210,7 @@ uint8_t utf8_to_cp437(const char **p) {
     else { (*p)++; }
     return '?';
 }
-// OLED plot a single character
+// OLED отрисовка символа
 void OLED_plotChar(uint8_t c, bool inverted) 
 {
   const uint8_t *glyph = ibm8x8_font_cp437[c];
@@ -216,7 +223,7 @@ void OLED_plotChar(uint8_t c, bool inverted)
   I2C_stop();
 }
 
-// OLED write a character or handle control characters
+// OLED отрисовать символ или применить управляющий символ
 void OLED_write(uint8_t c, bool inverted) 
 {
   if(c == '\n') {
@@ -231,16 +238,8 @@ void OLED_write(uint8_t c, bool inverted)
   OLED_plotChar(c, inverted);
 }
 
-// OLED print string
-void OLED_print(char* str) 
-{
-  while(*str) {
-    OLED_write(*str++, false);
-  }
-}
-
-// OLED print string
-void OLED_printS(const char* str, bool inverted) 
+// OLED печать строки
+void OLED_printS(char* str, bool inverted) 
 {
   while (*str) {
     uint8_t cp437 = utf8_to_cp437(&str);
@@ -248,17 +247,16 @@ void OLED_printS(const char* str, bool inverted)
   }
 }
 
-// OLED print string with newline
+// OLED печать строки с новой строки
 void OLED_println(char* str, bool inverted) 
 {
   OLED_printS(str, inverted);
   OLED_write('\n', inverted);
 }
 
-// For BCD conversion
-const uint32_t DIVIDER[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
-// Print decimal value (BCD conversion by substraction method)
+
+// Печать десчтичного числа по BCD методу
 void OLED_printD(uint32_t value, bool inverted) 
 {
   uint8_t digits   = 10;                          // print 10 digits
@@ -276,6 +274,7 @@ void OLED_printD(uint32_t value, bool inverted)
   }
 }
 
+// Печать float числа
 void OLED_printF(float value, uint8_t precision, bool inverted) 
 {
   static const uint32_t pow10[7] = {1, 10, 100, 1000, 10000, 100000, 1000000};
@@ -338,35 +337,36 @@ void OLED_printL(uint32_t value, bool inverted)
   OLED_printW(value, inverted);
 }
 
-// OLED set cursor position 
+// OLED позиция курсора
 void OLED_setpos(uint8_t x, uint8_t y) 
 {
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_CMD_MODE);               // set command mode
-  I2C_write(OLED_PAGE | y);	              // set page start address
-  I2C_write(x & 0x0F);			              // set lower nibble of start column
-  I2C_write(OLED_COLUMN_HIGH | (x >> 4)); // set higher nibble of start column
-  I2C_stop();                             // stop transmission
+  I2C_start(OLED_ADDR);                   
+  I2C_write(OLED_CMD_MODE);               
+  I2C_write(OLED_PAGE | y);	              
+  I2C_write(x & 0x0F);			              
+  I2C_write(OLED_COLUMN_HIGH | (x >> 4)); 
+  I2C_stop();                             
 }
 
 void ssd1306_start_data(void) 
 {
   I2C_start(OLED_ADDR);   
-	I2C_write(0x40);			// Control byte: D/C=1 - write data
+	I2C_write(0x40);			
 }
 
-// OLED fill screen
-void OLED_fill(uint8_t p) {
-  OLED_setpos(0, 0);                      // set cursor to display start
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_DAT_MODE);               // set data mode
-  for(uint16_t i=128*8; i; i--){          // send pattern
+// OLED заливка 
+void OLED_fill(uint8_t p)
+{
+  OLED_setpos(0, 0);                     
+  I2C_start(OLED_ADDR);                   
+  I2C_write(OLED_DAT_MODE);               
+  for(uint16_t i=128*8; i; i--) {          
     I2C_write(p);
   } 
-  I2C_stop();                             // stop transmission
+  I2C_stop();                            
 }
 
-// OLED draw bitmap
+// OLED отрисовка битмапа
 void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted) 
 {
 	int z=0;
@@ -374,8 +374,7 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
     OLED_setpos(x0, y);
     I2C_start(OLED_ADDR);
     I2C_write(OLED_DAT_MODE);
-    for(uint8_t x = x0; x < x0+w; x++)
-		{
+    for(uint8_t x = x0; x < x0+w; x++) {
       I2C_write(inverted? ~(bmp[z]) : bmp[z] );
 			z++;
 		}
@@ -383,49 +382,48 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
   }
 }
 
-// float value symbol length for positioning
+// Расчет длины float числа в символах для позиционирования
 size_t float_num_len(float value, uint8_t decimals)
 {
-    uint8_t buffer[16] = {};
-    uint8_t i = 0;
-    if (value < 0) {
-        buffer[i] = '-';
-        value = -value;
+  uint8_t buffer[16] = {};
+  uint8_t i = 0;
+  if (value < 0) {
+    buffer[i] = '-';
+    value = -value;
+  }
+
+  uint32_t factor = 1;
+  for (uint8_t i = 0; i < decimals; i++) factor *= 10;
+  uint32_t scaled = (uint32_t)(value * factor + 0.5f);
+
+  uint32_t int_part = scaled / factor;
+  uint32_t frac_part = scaled % factor;
+
+  uint8_t temp[16];
+  uint8_t j = 0;
+  if (int_part == 0) {
+    temp[j++] = '0';
+  } else {
+    uint32_t num = int_part;
+    while (num > 0) {
+      temp[j++] = '0' + (num % 10);
+      num /= 10;
     }
+  }
+  while (j > 0) {
+    buffer[i++] = temp[--j];
+  }
 
-    uint32_t factor = 1;
-    for (uint8_t i = 0; i < decimals; i++) factor *= 10;
-    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
+  buffer[i++] = '.';
 
-    uint32_t int_part = scaled / factor;
-    uint32_t frac_part = scaled % factor;
+  uint32_t divisor = factor / 10;
+  uint32_t frac = frac_part;
+  for (uint8_t d = 0; d < decimals; d++) {
+    buffer[i++] = '0' + (frac / divisor);
+    frac %= divisor;
+    divisor /= 10;
+  }
 
-    uint8_t temp[16];
-    uint8_t j = 0;
-    if (int_part == 0) {
-        temp[j++] = '0';
-    } else {
-        uint32_t num = int_part;
-        while (num > 0) {
-            temp[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-    }
-    while (j > 0) {
-        buffer[i++] = temp[--j];
-    }
-
-    buffer[i++] = '.';
-
-    uint32_t divisor = factor / 10;
-    uint32_t frac = frac_part;
-    for (uint8_t d = 0; d < decimals; d++) {
-        buffer[i++] = '0' + (frac / divisor);
-        frac %= divisor;
-        divisor /= 10;
-    }
-
-    buffer[i++] = '\0';
-
-    return strlen(buffer);
+  buffer[i++] = '\0';
+  return strlen(buffer);
 }

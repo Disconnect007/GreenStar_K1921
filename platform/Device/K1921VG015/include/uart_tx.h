@@ -5,6 +5,9 @@
 #include <stdbool.h>
 
 #define UART_BAUD 115200
+#define UART_BUSY_TIMEOUT_US  5000   
+#define UART_TX_TIMEOUT_US 1000
+#define UART_FLUSH_MAX_BYTES  32
 
 #ifdef __cplusplus
 extern "C" {

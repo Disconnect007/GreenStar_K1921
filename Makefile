@@ -2,7 +2,7 @@
 
 TARGET = firmware
 
-OPT = -O0
+OPT = -Og
 
 BUILD_DIR = build
 

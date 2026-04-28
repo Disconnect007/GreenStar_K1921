@@ -9,18 +9,21 @@ extern "C" {
 
 // I2C Parameters
 #ifndef FSFreq
-#define FSFreq           100000    // Standart frequency (Hz)
+#define FSFreq           100000    // Стандартный режим (Гц)
 #endif
 
 #ifndef HSFreq  
-#define HSFreq           400000    // Fast Mode frequency (Hz)
+#define HSFreq           400000    // Скоростной режим (Гц)
 #endif
 
+#define I2C_TIMEOUT_BUS_FREE_US   5000   
+#define I2C_TIMEOUT_STATE_US       500   
+
 // I2C Functions    
-void I2C_init(void);            // I2C initialization function
-void I2C_start(uint8_t addr);   // I2C start transmission, addr must contain R/W bit
-void I2C_write(uint8_t data);   // I2C transmit one data byte via I2C
-void I2C_stop(void);            // I2C stop transmission
+void I2C_init(void);            // Инициализация I2C 
+void I2C_start(uint8_t addr);   // Начало передачи I2C, адрес должен содержать бит R/W
+void I2C_write(uint8_t data);   // Передача байта
+void I2C_stop(void);            // Остановка передачи
 
 #ifdef __cplusplus
 };
