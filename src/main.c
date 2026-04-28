@@ -22,13 +22,19 @@
 
 //static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
 //static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
-static double ENK0[6] = {-240.0, -120.0, -60.0, -30.0, -15.0, -7.5};
-static double ENK1[6] = {24.0, 12.0, 6.0, 3.0, 1.5, 0.75};
+static const double ENK0[6] = {-240.0, -120.0, -60.0, -30.0, -15.0, -7.5};
+static const double ENK1[6] = {24.0, 12.0, 6.0, 3.0, 1.5, 0.75};
 static int8_t k_idx = 0;
 
-volatile bool tmr_trigger = false;
+static volatile bool tmr_trigger = false;
 
-void led_init(void) 
+static uint32_t spectr[4096] = {};
+static uint32_t prev_spectr[4096] = {};
+
+static float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time);
+static float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nchannels, float delta_ltime, double Dz, uint8_t idx);
+
+static void led_init(void) 
 {
     RCU->CGCFGAHB_bit.GPIOAEN = 1;
     RCU->RSTDISAHB_bit.GPIOAEN = 1;
@@ -36,7 +42,7 @@ void led_init(void)
     GPIOA->DATAOUTCLR = LEDS_MSK;
 }
 
-void IWDT_Init(uint32_t timeout_ms) 
+static void IWDT_Init(uint32_t timeout_ms) 
 {
     PMURTC->IWDG_CFG = (2 << PMURTC_IWDG_CFG_CLKSRC_Pos) | PMURTC_IWDG_CFG_RSTDIS_Msk;
     uint32_t ticks = (LSICLK_VAL / 1000) * timeout_ms;
@@ -45,18 +51,18 @@ void IWDT_Init(uint32_t timeout_ms)
     IWDT->LOCK = 0x1ACCE551;
 }
 
-void IWDT_Reset(void) 
+static void IWDT_Reset(void) 
 {
     IWDT->INTCLR = 0xFFFFFFFF;
 }
 
-void TMR32_IRQHandler(void)
+static void TMR32_IRQHandler(void)
 {
     tmr_trigger = true;            
     TMR32->IC = 3;                    
 }
 
-void TMR32_init(uint32_t period_ms)
+static void TMR32_init(uint32_t period_ms)
 {
     RCU->CGCFGAPB_bit.TMR32EN = 1;
     RCU->RSTDISAPB_bit.TMR32EN = 1;
@@ -70,7 +76,7 @@ void TMR32_init(uint32_t period_ms)
     PLIC_IntEnable     (Plic_Mach_Target, IsrVect_IRQ_TMR32);
 }
 
-void periph_init(void) 
+static void periph_init(void) 
 {
     SystemInit();
     SystemCoreClockUpdate();
@@ -83,7 +89,7 @@ void periph_init(void)
     adcsar_init(TSENSOR_ISRC_INT);
 }
 
-void check(void) 
+static void check(void) 
 {
     mtimer_sleep(800);
     GPIOA->DATAOUTTGL = LED0_MSK;
@@ -91,23 +97,18 @@ void check(void)
     GPIOA->DATAOUTTGL = LED0_MSK;
 }
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time);
-float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nchannels, float delta_ltime, double Dz, uint8_t idx);
-
 int main(void) 
 {
     periph_init();
     check();
 
-    static int32_t sbs_time = 0;
-    static float ader = 0.0;
-    static float ltime = 0.0, inprate = 0.0;
-    static bool success = false, first_measure = false;
-    static uint32_t spectr[4096] = {};
-    static uint32_t prev_spectr[4096] = {};
-    static double prev_ltime = 0.0;
-    static char aderlen = 0;
-    static char err = 3;
+    int32_t sbs_time = 0;
+    float ader = 0.0;
+    float ltime = 0.0, inprate = 0.0;
+    bool success = false, first_measure = false;
+    double prev_ltime = 0.0;
+    char aderlen = 0;
+    char err = 3;
     int16_t nchan = 0;
 
     OLED_clear();
@@ -277,7 +278,7 @@ int main(void)
     return 0;
 }
 
-float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nchannels, float delta_ltime, double Dz, uint8_t idx)
+static float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nchannels, float delta_ltime, double Dz, uint8_t idx)
 {
     double enk0 = ENK0[idx];
     double enk1 = ENK1[idx];
@@ -293,7 +294,7 @@ float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nchannels
 }
 
 
-float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time)
+static float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time)
 {
     double delta = (double)sp_rec_time / (double)SystemCoreClock;
     double enk0 = ENK0[idx];

@@ -54,7 +54,7 @@ void UART1_SendBuffer(const uint8_t *data, uint16_t length)
     }
 }
 
-bool UART1_DataAvailable(void) 
+static bool UART1_DataAvailable(void) 
 {
     return (UART_FlagStatus(UART1, UART_Flag_RxFIFOEmpty) == CLEAR);
 }
@@ -143,7 +143,7 @@ void UART2_SendBuffer(const uint8_t *data, uint16_t length)
     }    
 }
 
-bool UART2_DataAvailable(void)
+static bool UART2_DataAvailable(void)
 {
     return (UART_FlagStatus(UART2, UART_Flag_RxFIFOEmpty) == CLEAR);
 }
@@ -151,7 +151,7 @@ bool UART2_DataAvailable(void)
 void UART2_FlushRx(void)
 {
     uint16_t cnt = 0;
-    while (UART1_DataAvailable() && (cnt < UART_FLUSH_MAX_BYTES)) {
+    while (UART2_DataAvailable() && (cnt < UART_FLUSH_MAX_BYTES)) {
         (void)UART_RecieveData(UART1);
         cnt++;
     }

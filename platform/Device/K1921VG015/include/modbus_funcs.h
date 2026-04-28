@@ -13,10 +13,11 @@
 #define Hi(Int) (uint8_t) (Int>>8)
 #define Low(Int) (uint8_t) (Int)
 
-uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf);
-uint8_t modbus_read_holding(uint8_t addr, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf);
-uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf);
-uint8_t modbus_write_single_reg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf);
+union FloatConverter{
+    uint32_t u32;
+    float f32;
+};
+
 bool MODBUS_ReadInt16(uint8_t slave_addr, uint16_t reg_addr, int16_t *value);
 bool MODBUS_ReadInt32(uint8_t slave_addr, uint16_t reg_addr, int32_t *value);
 bool MODBUS_ReadFloat(uint8_t slave_addr, uint16_t reg_addr, float *value);

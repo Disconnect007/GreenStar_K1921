@@ -41,10 +41,14 @@ extern "C" {
 #define OLED_OFFSET       0xD3    // set display offset (y-scroll: following byte)
 #define OLED_COMPINS      0xDA    // set COM pin config (following byte)
 
+typedef struct {
+    uint16_t unicode;
+    uint8_t  cp437;
+} unicode_to_cp437_entry_t;
+
 // OLED functions
 void OLED_init(void);                       		// OLED init function
 void OLED_clear(void);                      		// OLED clear screen
-void OLED_write(uint8_t c, bool inverted);     		// OLED write a character or handle control characters
 void OLED_printS(char* str, bool inverted); 		// OLED print string
 void OLED_println(char* str, bool inverted);        // OLED print string with newline
 void OLED_printD(uint32_t value, bool inverted);    // Print decimal value

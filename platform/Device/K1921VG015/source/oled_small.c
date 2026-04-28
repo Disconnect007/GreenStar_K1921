@@ -37,14 +37,9 @@ const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
 	0x21, 0x00,	0x7f,	// Set Column Address (start,end) 0 - 127
 };
 
-const uint32_t DIVIDER[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+static const uint32_t DIVIDER[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
-uint8_t line, column, scroll;
-
-typedef struct {
-    uint16_t unicode;
-    uint8_t  cp437;
-} unicode_to_cp437_entry_t;
+static uint8_t line, column, scroll;
 
 static const unicode_to_cp437_entry_t unicode_to_cp437_table[] = {
     // Заглавные
@@ -184,7 +179,7 @@ void OLED_init(void)
   OLED_setpos(0,0);
 }
 
-uint8_t utf8_to_cp437(char **p) {
+static uint8_t utf8_to_cp437(char **p) {
     uint8_t c = (uint8_t)**p;
     if (c < 0x80) {
         (*p)++; 
@@ -211,7 +206,7 @@ uint8_t utf8_to_cp437(char **p) {
     return '?';
 }
 // OLED отрисовка символа
-void OLED_plotChar(uint8_t c, bool inverted) 
+static void OLED_plotChar(uint8_t c, bool inverted) 
 {
   const uint8_t *glyph = ibm8x8_font_cp437[c];
   I2C_start(OLED_ADDR);
@@ -224,7 +219,7 @@ void OLED_plotChar(uint8_t c, bool inverted)
 }
 
 // OLED отрисовать символ или применить управляющий символ
-void OLED_write(uint8_t c, bool inverted) 
+static void OLED_write(uint8_t c, bool inverted) 
 {
   if(c == '\n') {
     column = 0;
@@ -385,45 +380,46 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
 // Расчет длины float числа в символах для позиционирования
 size_t float_num_len(float value, uint8_t decimals)
 {
-  uint8_t buffer[16] = {};
-  uint8_t i = 0;
-  if (value < 0) {
-    buffer[i] = '-';
-    value = -value;
-  }
+    char buffer[16] = {0};
+    uint8_t i = 0;
 
-  uint32_t factor = 1;
-  for (uint8_t i = 0; i < decimals; i++) factor *= 10;
-  uint32_t scaled = (uint32_t)(value * factor + 0.5f);
-
-  uint32_t int_part = scaled / factor;
-  uint32_t frac_part = scaled % factor;
-
-  uint8_t temp[16];
-  uint8_t j = 0;
-  if (int_part == 0) {
-    temp[j++] = '0';
-  } else {
-    uint32_t num = int_part;
-    while (num > 0) {
-      temp[j++] = '0' + (num % 10);
-      num /= 10;
+    if (value < 0) {
+        buffer[i++] = '-';
+        value = -value;
     }
-  }
-  while (j > 0) {
-    buffer[i++] = temp[--j];
-  }
 
-  buffer[i++] = '.';
+    uint32_t factor = 1;
+    for (uint8_t d = 0; d < decimals; d++) factor *= 10;
 
-  uint32_t divisor = factor / 10;
-  uint32_t frac = frac_part;
-  for (uint8_t d = 0; d < decimals; d++) {
-    buffer[i++] = '0' + (frac / divisor);
-    frac %= divisor;
-    divisor /= 10;
-  }
+    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
+    uint32_t int_part = scaled / factor;
+    uint32_t frac_part = scaled % factor;
 
-  buffer[i++] = '\0';
-  return strlen(buffer);
+    char temp[16];
+    uint8_t j = 0;
+    if (int_part == 0) {
+        temp[j++] = '0';
+    } else {
+        uint32_t num = int_part;
+        while (num > 0) {
+            temp[j++] = '0' + (num % 10);
+            num /= 10;
+        }
+    }
+    while (j > 0) {
+        buffer[i++] = temp[--j];
+    }
+
+    buffer[i++] = '.';
+
+    uint32_t divisor = factor / 10;
+    uint32_t frac = frac_part;
+    for (uint8_t d = 0; d < decimals; d++) {
+        buffer[i++] = '0' + (frac / divisor);
+        frac %= divisor;
+        divisor /= 10;
+    }
+
+    buffer[i++] = '\0';
+    return strlen(buffer); 
 }

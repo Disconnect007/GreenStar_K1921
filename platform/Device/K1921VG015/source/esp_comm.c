@@ -2,7 +2,7 @@
 #include "esp_comm.h"
 #include <stdarg.h>
 
-uint8_t append_int16(uint8_t* buffer, uint8_t idx, int16_t value)
+static uint8_t append_int16(uint8_t* buffer, uint8_t idx, int16_t value)
 {
     if (value < 0) {
         buffer[idx++] = '-';
@@ -25,7 +25,7 @@ uint8_t append_int16(uint8_t* buffer, uint8_t idx, int16_t value)
     return idx;
 }
 
-uint8_t append_int32(uint8_t* buffer, uint8_t idx, int32_t value)
+static uint8_t append_int32(uint8_t* buffer, uint8_t idx, int32_t value)
 {
     if (value < 0) {
         buffer[idx++] = '-';
@@ -48,7 +48,7 @@ uint8_t append_int32(uint8_t* buffer, uint8_t idx, int32_t value)
     return idx;
 }
 
-uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals)
+static uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals)
 {
     if (value < 0) {
         buffer[idx++] = '-';
