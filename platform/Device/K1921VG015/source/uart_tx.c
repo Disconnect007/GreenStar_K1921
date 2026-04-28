@@ -4,13 +4,13 @@
 #include "plib015_uart.h"
 #include "uart_tx.h"
 
-//=======================UART1 FUNCSET===========================//
-
 void UART1_init()
 {
-
     UART_Cmd(UART1, DISABLE); // 25.5 пункт РП по UART
-    while(UART_FlagStatus(UART1, UART_Flag_Busy) == SET); 
+    uint64_t busy_timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(UART_BUSY_TIMEOUT_US);
+    while (UART_FlagStatus(UART1, UART_Flag_Busy) == SET) {
+        if (mtimer_get_raw_time() >= busy_timeout) return;
+    }
     UART_FIFOCmd(UART1, DISABLE); // 25.5 пункт РП по UART
 
     RCU->CGCFGAHB_bit.GPIOAEN = 1;
@@ -45,21 +45,26 @@ void UART1_init()
 
 void UART1_SendBuffer(const uint8_t *data, uint16_t length) 
 {
-    for(uint16_t i = 0; i < length; i++) {
-        while(UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET);
+    for (uint16_t i = 0; i < length; i++) {
+        uint64_t tx_timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(UART_TX_TIMEOUT_US);
+        while (UART_FlagStatus(UART1, UART_Flag_TxFIFOFull) == SET) {
+            if (mtimer_get_raw_time() >= tx_timeout) return;
+        }
         UART_SendData(UART1, data[i]);
     }
 }
 
-bool UART1_DataAvailable(void) 
+static bool UART1_DataAvailable(void) 
 {
     return (UART_FlagStatus(UART1, UART_Flag_RxFIFOEmpty) == CLEAR);
 }
 
 void UART1_FlushRx(void) 
 {
-    while(UART1_DataAvailable()) {
+    uint16_t cnt = 0;
+    while (UART1_DataAvailable() && (cnt < UART_FLUSH_MAX_BYTES)) {
         (void)UART_RecieveData(UART1);
+        cnt++;
     }
 }
 
@@ -85,16 +90,16 @@ uint16_t UART1_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
             }
         }
     }
-    
     return received;
 }
-
-//=======================UART2 FUNCSET===========================//
 
 void UART2_init(void)
 {
     UART_Cmd(UART2, DISABLE);
-    while (UART_FlagStatus(UART2, UART_Flag_Busy) == SET);
+    uint64_t busy_timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(UART_BUSY_TIMEOUT_US);
+    while (UART_FlagStatus(UART2, UART_Flag_Busy) == SET) {
+        if (mtimer_get_raw_time() >= busy_timeout) return;
+    }
     UART_FIFOCmd(UART2, DISABLE);
 
     RCU->CGCFGAHB_bit.GPIOAEN = 1;
@@ -130,20 +135,25 @@ void UART2_init(void)
 void UART2_SendBuffer(const uint8_t *data, uint16_t length)
 {
     for (uint16_t i = 0; i < length; i++) {
-        while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET);
+        uint64_t tx_timeout = mtimer_get_raw_time() + MTIMER_USEC_TO_CLOCKS(UART_TX_TIMEOUT_US);
+        while (UART_FlagStatus(UART2, UART_Flag_TxFIFOFull) == SET) {
+            if (mtimer_get_raw_time() >= tx_timeout) return;
+        }
         UART_SendData(UART2, data[i]);
-    }
+    }    
 }
 
-bool UART2_DataAvailable(void)
+static bool UART2_DataAvailable(void)
 {
     return (UART_FlagStatus(UART2, UART_Flag_RxFIFOEmpty) == CLEAR);
 }
 
 void UART2_FlushRx(void)
 {
-    while (UART2_DataAvailable()) {
-        (void)UART_RecieveData(UART2);
+    uint16_t cnt = 0;
+    while (UART2_DataAvailable() && (cnt < UART_FLUSH_MAX_BYTES)) {
+        (void)UART_RecieveData(UART1);
+        cnt++;
     }
 }
 
@@ -168,6 +178,5 @@ uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout
             }
         }
     }
-    
     return received;
 }

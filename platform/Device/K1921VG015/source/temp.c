@@ -1,4 +1,8 @@
 #include "temp.h"
+#include <K1921VG015.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <system_k1921vg015.h>
 
 uint16_t Get_Temp_adc()
 {

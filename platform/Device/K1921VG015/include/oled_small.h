@@ -1,14 +1,8 @@
-#pragma once
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "i2c_tx.h"
-#include <stdbool.h>
-#include <string.h>
-#include "bitmaps.h"
-#include "font8x8.h"
 
 // SSD1306 OLED height in pixels
 #ifndef SSD1306_HEIGHT
@@ -47,11 +41,14 @@ extern "C" {
 #define OLED_OFFSET       0xD3    // set display offset (y-scroll: following byte)
 #define OLED_COMPINS      0xDA    // set COM pin config (following byte)
 
+typedef struct {
+    uint16_t unicode;
+    uint8_t  cp437;
+} unicode_to_cp437_entry_t;
+
 // OLED functions
 void OLED_init(void);                       		// OLED init function
 void OLED_clear(void);                      		// OLED clear screen
-void OLED_write(char c, bool inverted);     		// OLED write a character or handle control characters
-void OLED_print(char* str);                 		// OLED print string
 void OLED_printS(char* str, bool inverted); 		// OLED print string
 void OLED_println(char* str, bool inverted);        // OLED print string with newline
 void OLED_printD(uint32_t value, bool inverted);    // Print decimal value
@@ -65,7 +62,6 @@ void OLED_fill(uint8_t p);                  		// Fill OLED with a character
 void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted); // Draw a bitmap
 void OLED_clearline(uint8_t line);
 void OLED_setline(uint8_t line);
-void OLED_print_ru_letter(uint8_t index, bool inverted);
 size_t float_num_len(float value, uint8_t decimals);
 
 #ifdef __cplusplus

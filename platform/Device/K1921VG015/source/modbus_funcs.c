@@ -3,13 +3,8 @@
 #include "uart_tx.h"
 #include "mtimer.h"
 
-union FloatConverter{
-    uint32_t u32;
-    float f32;
-};
-
 // Формирование Modbus запроса на чтение регистров
-uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf)
+static uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf)
 {
     tx_buf[0] = addr;
     tx_buf[1] = code;
@@ -26,7 +21,7 @@ uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_add
 }
 
 // Формирование Modbus запроса на запись 1-го регистра
-uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
+static uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
 {
     tx_buf[0] = addr;
     tx_buf[1] = code;
@@ -43,13 +38,13 @@ uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg
 }
 
 // Запрос на чтение holding регистров
-uint8_t modbus_read_holding(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *tx_buf)
+static uint8_t modbus_read_holding(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *tx_buf)
 {
     return modbus_read_holding_request(slave_addr, 0x03, reg_addr, num_registers, tx_buf);
 }
 
 // Запрос на запись 1-го регистра
-uint8_t modbus_write_single_reg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
+static uint8_t modbus_write_single_reg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
 {
     return modbus_write_single_reg_request(slave_addr, 0x06, reg_addr, write_data, tx_buf);
 }

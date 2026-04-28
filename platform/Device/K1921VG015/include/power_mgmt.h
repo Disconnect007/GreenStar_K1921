@@ -1,9 +1,6 @@
 #ifndef POWER_MGMT_H
 #define POWER_MGMT_H
 
-#include <K1921VG015.h>
-#include <system_k1921vg015.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,7 +26,6 @@ typedef enum {
     LDO_LEVEL_1V30 = 0x19
 } LdoLevel_t;
 
-// Прототипы функций
 void PM_DisableAllPeriph(void);
 void PM_SwitchToHSE(void);
 void PM_EnterMode(PowerMode_t mode);
