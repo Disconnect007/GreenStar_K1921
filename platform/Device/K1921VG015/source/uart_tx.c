@@ -54,7 +54,7 @@ void UART1_SendBuffer(const uint8_t *data, uint16_t length)
     }
 }
 
-static bool UART1_DataAvailable(void) 
+bool UART1_DataAvailable(void) 
 {
     return (UART_FlagStatus(UART1, UART_Flag_RxFIFOEmpty) == CLEAR);
 }
@@ -143,7 +143,7 @@ void UART2_SendBuffer(const uint8_t *data, uint16_t length)
     }    
 }
 
-static bool UART2_DataAvailable(void)
+bool UART2_DataAvailable(void)
 {
     return (UART_FlagStatus(UART2, UART_Flag_RxFIFOEmpty) == CLEAR);
 }

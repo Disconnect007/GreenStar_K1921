@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,23 +47,27 @@ typedef struct {
     uint8_t  cp437;
 } unicode_to_cp437_entry_t;
 
-// OLED functions
-void OLED_init(void);                       		// OLED init function
-void OLED_clear(void);                      		// OLED clear screen
-void OLED_printS(char* str, bool inverted); 		// OLED print string
-void OLED_println(char* str, bool inverted);        // OLED print string with newline
-void OLED_printD(uint32_t value, bool inverted);    // Print decimal value
-void OLED_printF(float value, uint8_t precision, bool inverted);       // Print float value with custom precision (max = 6)
-void OLED_printL(uint32_t value, bool inverted);    // Print hex long value
-void OLED_printW(uint16_t value, bool inverted);    // Print hex word value
-void OLED_printB(uint8_t value, bool inverted);     // Print hex byte value
-void OLED_fill(uint8_t p);                  		// Fill OLED with a character
-void OLED_setpos(uint8_t x, uint8_t y);     		// Set OLED cursor
-void OLED_fill(uint8_t p);                  		// Fill OLED with a character
-void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted); // Draw a bitmap
-void OLED_clearline(uint8_t line);
-void OLED_setline(uint8_t line);
-size_t float_num_len(float value, uint8_t decimals);
+void OLED_init(void);   // инициализация                    		
+void OLED_clear(void); // очистить экран  
+void OLED_setpos(uint8_t x, uint8_t y); // позиция курсора 
+void OLED_scrollDisplay(void); // прокрутка 
+void OLED_clearline(uint8_t line); // очистить линию
+void OLED_setline(uint8_t line); // установить курсор в начало линии (0-7)
+
+void OLED_printS(char* str, bool inverted);   // печать строки		
+void OLED_println(char* str, bool inverted);  //печать строки с новой строки      
+void OLED_printD(uint32_t value, bool inverted); // печать десчтичного числа по BCD методу
+void OLED_printF(float value, uint8_t precision, bool inverted); // печать float числа с заданной точностью
+void OLED_printN(uint8_t nibble, bool inverted); // byte nibble -> hex и печать  
+void OLED_printL(uint32_t value, bool inverted); // long -> hex и печать
+void OLED_printW(uint16_t value, bool inverted); // слово -> hex и печать
+void OLED_printB(uint8_t value, bool inverted);  // байт -> hex и печать
+
+void OLED_fill(uint8_t p); // заливка                 		       		
+void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted); // нарисовать битмап с левым верхним углом в (x0,y0)
+void OLED_ClearRect(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h); // очиcтить прямоугльную область с левым верхним углом в (x0,y0)
+
+size_t float_num_len(float value, uint8_t decimals); // длина float числа в символах для авто-позиционирования
 
 #ifdef __cplusplus
 };

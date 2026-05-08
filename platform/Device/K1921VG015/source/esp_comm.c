@@ -1,6 +1,103 @@
 #include "uart_tx.h"
+#include "plib015_uart.h"
+#include "K1921VG015.h"
 #include "esp_comm.h"
+#include "mtimer.h"
 #include <stdarg.h>
+#include <string.h>
+
+static EspLinkState_t link_state = LINK_OK;
+static bool esp_online = false;
+
+static void process_ack_result(bool ack_received)
+{
+    switch (link_state) {
+    case LINK_OK:
+        if (ack_received) {
+            esp_online = true;
+        } else {
+            ESP_HardwareReset();
+            link_state = LINK_RECOVERY;
+            esp_online = false;
+        }
+        break;
+
+    case LINK_RECOVERY:
+        if (ack_received) {
+            link_state = LINK_OK;
+            esp_online = true;
+        } else {
+            link_state = LINK_ERROR;
+            esp_online = false;
+        }
+        break;
+
+    case LINK_ERROR:
+        if (ack_received) {
+            link_state = LINK_OK;
+            esp_online = true;
+        } else {
+            esp_online = false;
+        }
+        break;
+    }
+}
+
+void ESP_InitResetPin(void)
+{
+    RCU->CGCFGAHB_bit.GPIOBEN = 1;
+    RCU->RSTDISAHB_bit.GPIOBEN = 1;
+    GPIOB->OUTENSET = ESP_RST_MSK; 
+    GPIOB->DATAOUTSET = ESP_RST_MSK;
+}
+
+void ESP_HardwareReset(void)
+{
+    GPIOB->DATAOUTCLR = ESP_RST_MSK;
+    mtimer_sleep(100);
+    GPIOB->DATAOUTSET = ESP_RST_MSK;
+    mtimer_sleep(3000);      
+    UART2_FlushRx();      
+}
+
+bool ESP_WaitForAck(void)
+{
+   for (int attempt = 0; attempt < ACK_MAX_ATTEMPTS; attempt++) {
+        uint8_t buf[8] = {0};
+        int idx = 0;
+        uint64_t start_time = mtimer_get_raw_time();
+        uint64_t timeout_clocks = MTIMER_MSEC_TO_CLOCKS(ACK_TIMEOUT_MS);
+        
+        while (1) {
+            if (UART2_DataAvailable()) {
+                char c = (char)UART_RecieveData(UART2);
+                if (c == '\n' || idx >= 7) {
+                    if (idx < 7) buf[idx] = '\0';
+                    break;
+                }
+                buf[idx++] = c;
+                start_time = mtimer_get_raw_time();
+            }
+            if (mtimer_get_raw_time() - start_time > timeout_clocks) {
+                break; 
+            }
+        }
+        
+        if (idx > 0 && strcmp((char*)buf, "ACK") == 0) {
+            while (UART2_DataAvailable()) {
+                if (UART_RecieveData(UART2) == '\n') break;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+void ESP_SendWithAck(const uint8_t *data, uint16_t len)
+{
+    UART2_SendBuffer(data, len);
+    process_ack_result(ESP_WaitForAck());
+}
 
 static uint8_t append_int16(uint8_t* buffer, uint8_t idx, int16_t value)
 {
@@ -91,51 +188,45 @@ static uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t d
 
 // Отправка произвольного числа данных на ESP в виде строки формата ("s,i,f...") 
 // где 's' - число int16, 'i' - int32, 'f' - float (4 bytes)
-void ESP_SendFormatted(const char* fmt, ...)
+void ESP_SendFormattedAck(const char* fmt, ...)
 {
     uint8_t buffer[64];
-    uint8_t i = 0;
+    int i = 0;
     va_list args;
     va_start(args, fmt);
     bool first = true;
 
     while (*fmt) {
-        if (!first) {
-            buffer[i++] = ',';
-        }
+        if (!first) buffer[i++] = ',';
         first = false;
-
         switch (*fmt) {
-            case 's': // int16_t
-                i = append_int16(buffer, i, (int16_t)va_arg(args, int));
-                break;
-            case 'i': // int32_t
-                i = append_int32(buffer, i, va_arg(args, int32_t));
-                break;
-            case 'f': // float (2 знака)
-                i = append_float(buffer, i, (float)va_arg(args, double), 2);
-                break;
-            default:
-                first = true;
-                break;
+            case 's': i = append_int16(buffer, i, (int16_t)va_arg(args, int)); break;
+            case 'i': i = append_int32(buffer, i, va_arg(args, int32_t)); break;
+            case 'f': i = append_float(buffer, i, (float)va_arg(args, double), 2); break;
+            default: first = true; break;
         }
         fmt++;
     }
-
     buffer[i++] = '\r';
     buffer[i++] = '\n';
     UART2_SendBuffer(buffer, i);
     va_end(args);
+    process_ack_result(ESP_WaitForAck());
 }
 
-void ESP_Send_Error(void)
+void ESP_SendErrorAck(void)
 {
-    uint8_t buffer[] = "ERROR\r\n";
-    UART2_SendBuffer(buffer, sizeof(buffer) - 1);
+    uint8_t buf[] = "ERROR\r\n";
+    UART2_SendBuffer(buf, sizeof(buf)-1);
+    process_ack_result(ESP_WaitForAck());
 }
 
-void ESP_Send_Stop(void)
+void ESP_SendStopAck(void)
 {
-    uint8_t buffer[] = "STOP\r\n";
-    UART2_SendBuffer(buffer, sizeof(buffer) - 1);
+    uint8_t buf[] = "STOP\r\n";
+    UART2_SendBuffer(buf, sizeof(buf)-1);
+    process_ack_result(ESP_WaitForAck());
 }
+
+bool ESP_IsOnline(void) { return esp_online; }
+bool ESP_IsError(void)  { return (link_state == LINK_ERROR); }

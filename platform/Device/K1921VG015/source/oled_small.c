@@ -1,12 +1,10 @@
 #include "i2c_tx.h"
-#include <stdbool.h>
 #include <string.h>
-#include "bitmaps.h"
 #include "font8x8.h"
 #include "oled_small.h"
 
 // OLED initialisation sequence
-const uint8_t OLED_INIT_CMD[] = {
+static const uint8_t OLED_INIT_CMD[] = {
   OLED_MULTIPLEX,   0x3F,                 // set multiplex ratio  
   OLED_CHARGEPUMP,  0x14,                 // set DC-DC enable  
   OLED_MEMORYMODE,  0x02,                 // set page addressing mode
@@ -15,7 +13,7 @@ const uint8_t OLED_INIT_CMD[] = {
   OLED_DISPLAY_ON                         // display on
 };
 
-const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
+static const uint8_t ssd1306_init_sequence [] = {	// Initialization Sequence
 	0xAE,			// Set Display ON/OFF - AE=OFF, AF=ON
 	0xD5, 0xF0,		// Set display clock divide ratio/oscillator frequency, set divide ratio
 	0xA8, 0x3F,		// Set multiplex ratio (1 to 64) ... (height - 1)
@@ -114,7 +112,6 @@ static const unicode_to_cp437_entry_t unicode_to_cp437_table[] = {
     {0x00B0, 0xF8},  // Градус Цельсия
 };
 
-// OLED установить курсор в начало линии (0-7)
 void OLED_setline(uint8_t line) 
 {
   I2C_start(OLED_ADDR);                   
@@ -124,7 +121,6 @@ void OLED_setline(uint8_t line)
   I2C_stop();                             
 }
 
-// OLED очистить линию
 void OLED_clearline(uint8_t line) 
 {
   uint8_t i;
@@ -137,7 +133,6 @@ void OLED_clearline(uint8_t line)
   I2C_stop();                             
 }
 
-// OLED очистить экран
 void OLED_clear(void) 
 {
   uint16_t i;
@@ -150,19 +145,17 @@ void OLED_clear(void)
   I2C_stop();                                     
 }
 
-// OLED прокрутка 
 void OLED_scrollDisplay(void) 
 {
-  OLED_clearline(scroll);                 // clear line
-  scroll = (scroll + 1) & 0x07;           // set next line
-  I2C_start(OLED_ADDR);                   // start transmission to OLED
-  I2C_write(OLED_CMD_MODE);               // set command mode
-  I2C_write(OLED_OFFSET);                 // set display offset:
-  I2C_write(scroll << 3);                 // scroll up
-  I2C_stop();                             // stop transmission
+  OLED_clearline(scroll);                
+  scroll = (scroll + 1) & 0x07;        
+  I2C_start(OLED_ADDR);             
+  I2C_write(OLED_CMD_MODE);               
+  I2C_write(OLED_OFFSET);                 
+  I2C_write(scroll << 3);                 
+  I2C_stop();                             
 }
 
-// OLED инициализация
 void OLED_init(void) 
 {
   uint8_t i;
@@ -205,6 +198,7 @@ static uint8_t utf8_to_cp437(char **p) {
     else { (*p)++; }
     return '?';
 }
+
 // OLED отрисовка символа
 static void OLED_plotChar(uint8_t c, bool inverted) 
 {
@@ -233,7 +227,6 @@ static void OLED_write(uint8_t c, bool inverted)
   OLED_plotChar(c, inverted);
 }
 
-// OLED печать строки
 void OLED_printS(char* str, bool inverted) 
 {
   while (*str) {
@@ -242,34 +235,29 @@ void OLED_printS(char* str, bool inverted)
   }
 }
 
-// OLED печать строки с новой строки
 void OLED_println(char* str, bool inverted) 
 {
   OLED_printS(str, inverted);
   OLED_write('\n', inverted);
 }
 
-
-
-// Печать десчтичного числа по BCD методу
 void OLED_printD(uint32_t value, bool inverted) 
 {
-  uint8_t digits   = 10;                          // print 10 digits
-  uint8_t leadflag = 0;                           // flag for leading spaces
-  while(digits--) {                               // for all digits
-    uint8_t digitval = 0;                         // start with digit value 0
-    uint32_t divider = DIVIDER[digits];           // read current divider
-    while(value >= divider) {                     // if current divider fits into the value
-      leadflag = 1;                               // end of leading spaces
-      digitval++;                                 // increase digit value
-      value -= divider;                           // decrease value by divider
+  uint8_t digits   = 10;                          
+  uint8_t leadflag = 0;                          
+  while(digits--) {                               
+    uint8_t digitval = 0;                         
+    uint32_t divider = DIVIDER[digits];           
+    while(value >= divider) {                   
+      leadflag = 1;                               
+      digitval++;                                 
+      value -= divider;                           
     }
-    if(!digits)  leadflag++;                      // least digit has to be printed
-    if(leadflag) OLED_write(digitval + '0', inverted);      // print the digit
+    if(!digits)  leadflag++;                     
+    if(leadflag) OLED_write(digitval + '0', inverted);     
   }
 }
 
-// Печать float числа
 void OLED_printF(float value, uint8_t precision, bool inverted) 
 {
   static const uint32_t pow10[7] = {1, 10, 100, 1000, 10000, 100000, 1000000};
@@ -305,34 +293,29 @@ void OLED_printF(float value, uint8_t precision, bool inverted)
   }
 }
 
-// Convert byte nibble into hex character and print it
 void OLED_printN(uint8_t nibble, bool inverted) 
 {
   OLED_write((nibble <= 9) ? ('0' + nibble) : ('A' - 10 + nibble), inverted);
 }
 
-// Convert byte into hex characters and print it
 void OLED_printB(uint8_t value, bool inverted) 
 {
   OLED_printN(value >> 4, inverted);
   OLED_printN(value & 0x0f, inverted);
 }
 
-// Convert word into hex characters and print it
 void OLED_printW(uint16_t value, bool inverted) 
 {
   OLED_printB(value >> 8, inverted);
   OLED_printB(value, inverted);
 }
 
-// Convert long into hex characters and print it
 void OLED_printL(uint32_t value, bool inverted) 
 {
   OLED_printW(value >> 16, inverted);
   OLED_printW(value, inverted);
 }
 
-// OLED позиция курсора
 void OLED_setpos(uint8_t x, uint8_t y) 
 {
   I2C_start(OLED_ADDR);                   
@@ -349,7 +332,6 @@ void ssd1306_start_data(void)
 	I2C_write(0x40);			
 }
 
-// OLED заливка 
 void OLED_fill(uint8_t p)
 {
   OLED_setpos(0, 0);                     
@@ -361,7 +343,6 @@ void OLED_fill(uint8_t p)
   I2C_stop();                            
 }
 
-// OLED отрисовка битмапа
 void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t* bmp, bool inverted) 
 {
 	int z=0;
@@ -377,7 +358,21 @@ void OLED_DrawBitmap(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h, const uint8_t
   }
 }
 
-// Расчет длины float числа в символах для позиционирования
+void OLED_ClearRect(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h) 
+{
+	int z=0;
+  for(uint8_t y = y0; y < y0+(h/8); y++) {
+    OLED_setpos(x0, y);
+    I2C_start(OLED_ADDR);
+    I2C_write(OLED_DAT_MODE);
+    for(uint8_t x = x0; x < x0+w; x++) {
+      I2C_write(0x00);
+			z++;
+		}
+    I2C_stop();
+  }
+}
+
 size_t float_num_len(float value, uint8_t decimals)
 {
     char buffer[16] = {0};

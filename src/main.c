@@ -1,6 +1,7 @@
 #include <K1921VG015.h>
 #include <system_k1921vg015.h>
 #include <string.h>
+#include <stdio.h>
 #include "mtimer.h"
 #include "i2c_tx.h"
 #include "oled_small.h"
@@ -10,18 +11,16 @@
 #include "esp_comm.h"
 #include "temp.h"
 #include "power_mgmt.h"
-
+#include "bitmaps.h"
 
 #define LEDS_MSK  0xF000
 #define LED0_PIN  12
 #define LED0_MSK  (1 << LED0_PIN)
 
 #define TIME_EPS    1.0E-5
-#define MIN_DELTA   1.0E-2
+#define MIN_DELTA   0.5
 #define DZ          1.0E-6
 
-//static double ENK0[6] = {-239.137, -118.336, -62.554, -35.514, -24.453, -14.380};
-//static double ENK1[6] = {24.549, 12.396, 6.198, 3.122, 1.559, 0.780};
 static const double ENK0[6] = {-240.0, -120.0, -60.0, -30.0, -15.0, -7.5};
 static const double ENK1[6] = {24.0, 12.0, 6.0, 3.0, 1.5, 0.75};
 static int8_t k_idx = 0;
@@ -66,11 +65,9 @@ static void TMR32_init(uint32_t period_ms)
 {
     RCU->CGCFGAPB_bit.TMR32EN = 1;
     RCU->RSTDISAPB_bit.TMR32EN = 1;
-
     TMR32->CAPCOM[0].VAL = ((SystemCoreClock / 1000) * period_ms) - 1;
     TMR32->CTRL_bit.MODE = 1;
     TMR32->IM = 2;
-
     PLIC_SetIrqHandler (Plic_Mach_Target, IsrVect_IRQ_TMR32, TMR32_IRQHandler);
     PLIC_SetPriority   (IsrVect_IRQ_TMR32, 0x1);
     PLIC_IntEnable     (Plic_Mach_Target, IsrVect_IRQ_TMR32);
@@ -80,8 +77,9 @@ static void periph_init(void)
 {
     SystemInit();
     SystemCoreClockUpdate();
-    IWDT_Init(30000);
+    IWDT_Init(15000);
     led_init();
+    ESP_InitResetPin();
     UART1_init();
     UART2_init();
     I2C_init();
@@ -102,7 +100,6 @@ int main(void)
     periph_init();
     check();
 
-    int32_t sbs_time = 0;
     float ader = 0.0;
     float ltime = 0.0, inprate = 0.0;
     bool success = false, first_measure = false;
@@ -112,23 +109,33 @@ int main(void)
     int16_t nchan = 0;
 
     OLED_clear();
-    OLED_setpos(32, 1);
-    OLED_printS("  МАЭД  ", true);
-    OLED_setpos(52, 2);
+    OLED_DrawBitmap(0, 2, 128, 40, GSlogo, false);
+    mtimer_sleep(5000);
+    OLED_clear();
+    for (int i = 0; i < 11; i++) {
+        OLED_DrawBitmap(115, 0, 12, 16, battery[i], false);
+        mtimer_sleep(100);
+    }
+    OLED_DrawBitmap(0, 0, 12, 16, wifi, false);
+    OLED_setpos(0, 3);
+    OLED_printS("H10", false);
+    OLED_setpos(36, 3);
     OLED_printS("Н/Д", false);
-    OLED_setpos(32, 3);
-    OLED_printS("[мкЗв/ч]", false);
+    OLED_setpos(80, 3);
+    OLED_printS("мкЗв/ч", false);
     OLED_setpos(0, 5);
     OLED_printS("СТАТУС:", false);
     OLED_setpos(88, 5);
-    OLED_printS(" Н/Д ", true);
+    OLED_printS("  Н/Д", true);
     OLED_setpos(0, 7);
     OLED_printS("ТЕМП:", false);
-    OLED_setpos(96, 7);
-    OLED_printS("[°С]", false);
+    OLED_setpos(112, 7);
+    OLED_printS("°С", false);
 
     TMR32_init(3000);
     InterruptEnable();
+
+    bool prev_esp_online = true;
 
     while(1)
     {
@@ -138,59 +145,55 @@ int main(void)
                 InterruptEnable();
                 __asm volatile ("WFI");
                 __asm("NOP");
-		        __asm("NOP");
-		        __asm("NOP");
+                __asm("NOP");
+                __asm("NOP");
             } else {
                 InterruptEnable();
             }
         }
         tmr_trigger = false;
 
-        OLED_setpos(38, 7);
-        OLED_printS(" ", true);
-        OLED_printF(Get_Temp_Celsius(), 2, true);
-        OLED_printS(" ", true);
+        bool current_online = ESP_IsOnline();
+        if (current_online != prev_esp_online) {
+            if (current_online) {
+                OLED_DrawBitmap(0, 0, 12, 16, wifi, false);
+            } else {
+                OLED_ClearRect(0, 0, 12, 16);
+            }
+            prev_esp_online = current_online;
+        }
+
+        OLED_setpos(72, 7);
+        OLED_printF(Get_Temp_Celsius(), 2, false);
 
         switch(err) {
             case 0:
-                OLED_setpos(64, 5);
-                OLED_printS("        ", false);
-                OLED_setpos(72, 5);
-                OLED_printS(" НОРМА ", true);
+                OLED_setpos(88, 5);
+                OLED_printS("НОРМА", true);
                 break;
             case 1: 
-                OLED_setpos(44, 2);
+                OLED_setpos(32, 3);
                 OLED_printS(" Н/Д ", false);
-                OLED_setpos(64, 5);
-                OLED_printS("        ", false);
-                OLED_setpos(64, 5);
-                OLED_printS(" ОШИБКА ", true);
+                OLED_setpos(88, 5);
+                OLED_printS("КОД 1", true); 
                 break;
             case 2:
-                OLED_setpos(64, 5);
-                OLED_printS("        ", false);
-                OLED_setpos(80, 5);
-                OLED_printS(" СТОП ", true);
+                OLED_setpos(88, 5);
+                OLED_printS("СТОП", true);
+                break;
+            case 4:
+                OLED_setpos(88, 5);
+                OLED_printS("КОД 2", true);
                 break;
             default:
-                OLED_setpos(64, 5);
-                OLED_printS("        ", false);
                 OLED_setpos(88, 5);
-                OLED_printS(" Н/Д ", true);
+                OLED_printS("  Н/Д", true);
                 break;
-        }
-
-        success = MODBUS_ReadInt32(SBS_ADDR, 0x090F, &sbs_time);
-        if (!success) { 
-            ESP_Send_Error();
-            first_measure = true;
-            err = 1; 
-            continue; 
         }
 
         success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
         if (!success) {
-            ESP_Send_Error();  
+            ESP_SendErrorAck();      
             first_measure = true;
             err = 1; 
             continue; 
@@ -201,15 +204,15 @@ int main(void)
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
         uint64_t sp_rec_time = mtimer_get_raw_time() - t_sp_start;
         if (!success) { 
-            ESP_Send_Error(); 
+            ESP_SendErrorAck();
             first_measure = true; 
             err = 1; 
             continue; 
         }
 
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
-        if (!success || ltime <= 0.0f) {
-            ESP_Send_Error();
+        if (!success || ltime <= 0.0) {
+            ESP_SendErrorAck();
             first_measure = true;
             err = 1;  
             continue; 
@@ -218,13 +221,13 @@ int main(void)
         
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
         if (!success) {
-            ESP_Send_Error(); 
+            ESP_SendErrorAck();
             first_measure = true;
             err = 1;  
             continue; 
         }
 
-        switch(nchan) {
+        switch (nchan) {
             case 128:  k_idx = 0; break;
             case 256:  k_idx = 1; break;
             case 512:  k_idx = 2; break;
@@ -234,17 +237,17 @@ int main(void)
             default:   k_idx = -1;
         }
 
-        if(k_idx == -1) {err = 1; continue;}
-
-        if(first_measure) {
+        if (k_idx == -1) {err = 1; continue;}
+        if (ltime <= MIN_DELTA) {first_measure = true; continue;} 
+        if (first_measure) {
             ader = DoseRateInstant(spectr, nchan, ltime, DZ, k_idx, sp_rec_time);
             if (ader < 0) {IWDT_Reset(); continue;}
-            ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
+            ESP_SendFormattedAck("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
             first_measure = false;
             aderlen = float_num_len(ader, 2);
-            OLED_setpos((128 - aderlen * 8) / 2, 2);
+            OLED_setpos((128 - aderlen * 8) / 2 - 12, 3);
             OLED_printF(ader, 2, false);
         } else {
             float delta_ltime = ltime - prev_ltime;
@@ -254,7 +257,7 @@ int main(void)
                 continue;
             }
             if (delta_ltime <= TIME_EPS) {
-                ESP_Send_Stop();
+                ESP_SendStopAck();
                 err = 2;
                 IWDT_Reset(); 
                 continue;   
@@ -265,14 +268,19 @@ int main(void)
             }
 
             ader = DoseRatediff(spectr, prev_spectr, nchan, delta_ltime, DZ, k_idx);
-            ESP_SendFormatted("s,f,f,f", nchan, ader, ltime, inprate);
+            ESP_SendFormattedAck("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
             aderlen = float_num_len(ader, 2);
-            OLED_setpos((128 - aderlen * 8) / 2, 2);
+            OLED_setpos((128 - aderlen * 8) / 2 - 12, 3);
             OLED_printF(ader, 2, false);
         }
-        err = 0;
+
+        if (ESP_IsError()) {
+            err = 4;
+        } else {
+            err = 0;
+        }
         IWDT_Reset();
     }
     return 0;
@@ -292,7 +300,6 @@ static float DoseRatediff(uint32_t spectr[], uint32_t prev_spectr[], uint16_t nc
     double dose_rate = (sum_diff * Dz) / delta_ltime;
     return (float)dose_rate;
 }
-
 
 static float DoseRateInstant(uint32_t spectr[], uint16_t nchannels, float ltime, double Dz, uint8_t idx, uint64_t sp_rec_time)
 {

@@ -21,10 +21,12 @@ typedef union {
 void UART1_init();
 void UART1_SendBuffer(const uint8_t *data, uint16_t length);
 void UART1_FlushRx(void);
+bool UART1_DataAvailable(void);
 uint16_t UART1_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
 void UART2_init();
 void UART2_SendBuffer(const uint8_t *data, uint16_t length);
 void UART2_FlushRx(void);
+bool UART2_DataAvailable(void);
 uint16_t UART2_ReceiveBuffer(uint8_t *buffer, uint16_t max_len, uint32_t timeout_ms, uint32_t interchar_ms);
 
 #ifdef __cplusplus
