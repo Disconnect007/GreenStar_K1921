@@ -1,29 +1,28 @@
-#ifndef ESP_COMM_H_
-#define ESP_COMM_H_
+#ifndef ESP_COMM_H
+#define ESP_COMM_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#define ESP_RST_MSK 0x8000 // PB15
+#define REQ_GET_DATA       0x01
+#define REQ_EXEC_CMD       0x02
 
-#define ACK_TIMEOUT_MS      1000
-#define ACK_MAX_ATTEMPTS    3
+#define CMD_START          0x01
+#define CMD_STOP           0x02
+#define CMD_CLEAR          0x03
+#define CMD_SET_CHANNELS   0x04
 
-typedef enum {
-    LINK_OK,           // обмен в порядке
-    LINK_RECOVERY,     // один сброс выполнен, ждём ACK
-    LINK_ERROR         // сброс не помог, аппаратная ошибка
-} EspLinkState_t;
+#define SYS_STATE_OK       0xAA
+#define SYS_STATE_STOPPED  0xBB
+#define SYS_STATE_ERROR    0xEE
 
-void ESP_InitResetPin(void);
-void ESP_HardwareReset(void);
-bool ESP_WaitForAck(void);
-void ESP_SendWithAck(const uint8_t *data, uint16_t len);
-void ESP_SendFormattedAck(const char* fmt, ...);
-void ESP_SendErrorAck(void);
-void ESP_SendStopAck(void);
-bool ESP_IsOnline(void);
-void ESP_ClearErrorCount(void);
-bool ESP_IsError(void);
+extern uint16_t  g_nchan;
+extern float    g_ader;
+extern float    g_ltime;
+extern float    g_inprate;
+extern uint8_t  g_system_state;
+extern bool     g_restart_measurement;   // флаг для main: начать измерение заново
+
+void ESP_ProcessRequest(void);
 
 #endif

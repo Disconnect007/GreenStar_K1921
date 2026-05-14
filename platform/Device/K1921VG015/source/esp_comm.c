@@ -1,232 +1,111 @@
-#include "uart_tx.h"
-#include "plib015_uart.h"
-#include "K1921VG015.h"
 #include "esp_comm.h"
+#include "uart_tx.h"
+#include "modbus_funcs.h"
+#include "modbus_sbs_regs.h"
 #include "mtimer.h"
-#include <stdarg.h>
 #include <string.h>
 
-static EspLinkState_t link_state = LINK_OK;
-static bool esp_online = false;
+// буфер больше не нужен для накопления, удаляем rx_buf и rx_idx
 
-static void process_ack_result(bool ack_received)
+uint16_t  g_nchan = 0;
+float    g_ader = 0.0f;
+float    g_ltime = 0.0f;
+float    g_inprate = 0.0f;
+uint8_t  g_system_state = SYS_STATE_OK;
+bool     g_restart_measurement = false;
+
+static void SendResponse(void);
+static bool WriteSBSRegister(uint16_t reg, uint16_t value);
+
+void ESP_ProcessRequest(void)
 {
-    switch (link_state) {
-    case LINK_OK:
-        if (ack_received) {
-            esp_online = true;
-        } else {
-            ESP_HardwareReset();
-            link_state = LINK_RECOVERY;
-            esp_online = false;
-        }
-        break;
+    uint8_t buf[4];
+    uint16_t len = UART2_ReceiveBuffer(buf, 3, 100, 10);
 
-    case LINK_RECOVERY:
-        if (ack_received) {
-            link_state = LINK_OK;
-            esp_online = true;
-        } else {
-            link_state = LINK_ERROR;
-            esp_online = false;
-        }
-        break;
+    if (len == 0) return;
 
-    case LINK_ERROR:
-        if (ack_received) {
-            link_state = LINK_OK;
-            esp_online = true;
-        } else {
-            esp_online = false;
-        }
-        break;
-    }
-}
-
-void ESP_InitResetPin(void)
-{
-    RCU->CGCFGAHB_bit.GPIOBEN = 1;
-    RCU->RSTDISAHB_bit.GPIOBEN = 1;
-    GPIOB->OUTENSET = ESP_RST_MSK; 
-    GPIOB->DATAOUTSET = ESP_RST_MSK;
-}
-
-void ESP_HardwareReset(void)
-{
-    GPIOB->DATAOUTCLR = ESP_RST_MSK;
-    mtimer_sleep(100);
-    GPIOB->DATAOUTSET = ESP_RST_MSK;
-    mtimer_sleep(3000);      
-    UART2_FlushRx();      
-}
-
-bool ESP_WaitForAck(void)
-{
-   for (int attempt = 0; attempt < ACK_MAX_ATTEMPTS; attempt++) {
-        uint8_t buf[8] = {0};
-        int idx = 0;
-        uint64_t start_time = mtimer_get_raw_time();
-        uint64_t timeout_clocks = MTIMER_MSEC_TO_CLOCKS(ACK_TIMEOUT_MS);
-        
-        while (1) {
-            if (UART2_DataAvailable()) {
-                char c = (char)UART_RecieveData(UART2);
-                if (c == '\n' || idx >= 7) {
-                    if (idx < 7) buf[idx] = '\0';
-                    break;
+    if (buf[0] == REQ_GET_DATA) {
+        // просто запрос данных – ничего не делаем, сразу ответим
+    } else if (buf[0] == REQ_EXEC_CMD && len >= 2) {
+        uint8_t cmd = buf[1];
+        bool ok = false;
+        switch (cmd) {
+        case CMD_START:
+            ok = WriteSBSRegister(SBS_STATE_REG, SBS_STATE_START);
+            if (ok) {
+                g_system_state = SYS_STATE_OK;
+                g_restart_measurement = true;
+            } else {
+                g_system_state = SYS_STATE_ERROR;
+            }
+            break;
+        case CMD_STOP:
+            ok = WriteSBSRegister(SBS_STATE_REG, SBS_STATE_STOP);
+            if (ok) {
+                g_system_state = SYS_STATE_STOPPED;
+            } else {
+                g_system_state = SYS_STATE_ERROR;
+            }
+            break;
+        case CMD_CLEAR:
+            ok = WriteSBSRegister(SBS_STATE_REG, SBS_STATE_CLEAR);
+            if (ok) {
+                g_restart_measurement = true;
+                // g_system_state остаётся прежним (если была норма – будет OK)
+            } else {
+                g_system_state = SYS_STATE_ERROR;
+            }
+            break;
+        case CMD_SET_CHANNELS:
+            if (len >= 3) {
+                uint8_t idx = buf[2];
+                if (idx <= 5) {
+                    int nch = 128 << idx;
+                    ok = WriteSBSRegister(SBS_NCHANNELS_REG, nch);
+                    if (!ok) {
+                        g_system_state = SYS_STATE_ERROR;
+                    }
                 }
-                buf[idx++] = c;
-                start_time = mtimer_get_raw_time();
             }
-            if (mtimer_get_raw_time() - start_time > timeout_clocks) {
-                break; 
-            }
-        }
-        
-        if (idx > 0 && strcmp((char*)buf, "ACK") == 0) {
-            while (UART2_DataAvailable()) {
-                if (UART_RecieveData(UART2) == '\n') break;
-            }
-            return true;
+            break;
+        default:
+            break;
         }
     }
-    return false;
+
+    SendResponse();
 }
 
-void ESP_SendWithAck(const uint8_t *data, uint16_t len)
+static void SendResponse(void)
 {
-    UART2_SendBuffer(data, len);
-    process_ack_result(ESP_WaitForAck());
+    uint8_t resp[15];
+    resp[0] = g_system_state;
+
+    resp[1] = g_nchan & 0xFF;
+    resp[2] = (g_nchan >> 8) & 0xFF;
+
+    uint32_t ader_raw = (uint32_t)(g_ader * 1000000.0f);
+    resp[3] = ader_raw & 0xFF;
+    resp[4] = (ader_raw >> 8) & 0xFF;
+    resp[5] = (ader_raw >> 16) & 0xFF;
+    resp[6] = (ader_raw >> 24) & 0xFF;
+
+    uint32_t ltime_raw = (uint32_t)(g_ltime * 1000000.0f);
+    resp[7] = ltime_raw & 0xFF;
+    resp[8] = (ltime_raw >> 8) & 0xFF;
+    resp[9] = (ltime_raw >> 16) & 0xFF;
+    resp[10] = (ltime_raw >> 24) & 0xFF;
+
+    uint32_t inprate_raw = (uint32_t)(g_inprate * 1000000.0f);
+    resp[11] = inprate_raw & 0xFF;
+    resp[12] = (inprate_raw >> 8) & 0xFF;
+    resp[13] = (inprate_raw >> 16) & 0xFF;
+    resp[14] = (inprate_raw >> 24) & 0xFF;
+
+    UART2_SendBuffer(resp, 15);
 }
 
-static uint8_t append_int16(uint8_t* buffer, uint8_t idx, int16_t value)
+static bool WriteSBSRegister(uint16_t reg, uint16_t value)
 {
-    if (value < 0) {
-        buffer[idx++] = '-';
-        value = -value;
-    }
-    uint8_t rev[8];
-    uint8_t j = 0;
-    uint16_t num = (uint16_t)value;
-    if (num == 0) {
-        buffer[idx++] = '0';
-    } else {
-        while (num > 0) {
-            rev[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-        while (j > 0) {
-            buffer[idx++] = rev[--j];
-        }
-    }
-    return idx;
+    return MODBUS_WriteSingleReg(SBS_ADDR, reg, value);
 }
-
-static uint8_t append_int32(uint8_t* buffer, uint8_t idx, int32_t value)
-{
-    if (value < 0) {
-        buffer[idx++] = '-';
-        value = -value;
-    }
-    uint8_t rev[16];
-    uint8_t j = 0;
-    uint32_t num = (uint32_t)value;
-    if (num == 0) {
-        buffer[idx++] = '0';
-    } else {
-        while (num > 0) {
-            rev[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-        while (j > 0) {
-            buffer[idx++] = rev[--j];
-        }
-    }
-    return idx;
-}
-
-static uint8_t append_float(uint8_t* buffer, uint8_t idx, float value, uint8_t decimals)
-{
-    if (value < 0) {
-        buffer[idx++] = '-';
-        value = -value;
-    }
-
-    uint32_t factor = 1;
-    for (uint8_t i = 0; i < decimals; i++) factor *= 10;
-    uint32_t scaled = (uint32_t)(value * factor + 0.5f);
-
-    uint32_t int_part = scaled / factor;
-    uint32_t frac_part = scaled % factor;
-
-    uint8_t temp[16];
-    uint8_t j = 0;
-    if (int_part == 0) {
-        temp[j++] = '0';
-    } else {
-        uint32_t num = int_part;
-        while (num > 0) {
-            temp[j++] = '0' + (num % 10);
-            num /= 10;
-        }
-    }
-    while (j > 0) {
-        buffer[idx++] = temp[--j];
-    }
-
-    buffer[idx++] = '.';
-
-    uint32_t divisor = factor / 10;
-    uint32_t frac = frac_part;
-    for (uint8_t d = 0; d < decimals; d++) {
-        buffer[idx++] = '0' + (frac / divisor);
-        frac %= divisor;
-        divisor /= 10;
-    }
-    return idx;
-}
-
-// Отправка произвольного числа данных на ESP в виде строки формата ("s,i,f...") 
-// где 's' - число int16, 'i' - int32, 'f' - float (4 bytes)
-void ESP_SendFormattedAck(const char* fmt, ...)
-{
-    uint8_t buffer[64];
-    int i = 0;
-    va_list args;
-    va_start(args, fmt);
-    bool first = true;
-
-    while (*fmt) {
-        if (!first) buffer[i++] = ',';
-        first = false;
-        switch (*fmt) {
-            case 's': i = append_int16(buffer, i, (int16_t)va_arg(args, int)); break;
-            case 'i': i = append_int32(buffer, i, va_arg(args, int32_t)); break;
-            case 'f': i = append_float(buffer, i, (float)va_arg(args, double), 2); break;
-            default: first = true; break;
-        }
-        fmt++;
-    }
-    buffer[i++] = '\r';
-    buffer[i++] = '\n';
-    UART2_SendBuffer(buffer, i);
-    va_end(args);
-    process_ack_result(ESP_WaitForAck());
-}
-
-void ESP_SendErrorAck(void)
-{
-    uint8_t buf[] = "ERROR\r\n";
-    UART2_SendBuffer(buf, sizeof(buf)-1);
-    process_ack_result(ESP_WaitForAck());
-}
-
-void ESP_SendStopAck(void)
-{
-    uint8_t buf[] = "STOP\r\n";
-    UART2_SendBuffer(buf, sizeof(buf)-1);
-    process_ack_result(ESP_WaitForAck());
-}
-
-bool ESP_IsOnline(void) { return esp_online; }
-bool ESP_IsError(void)  { return (link_state == LINK_ERROR); }

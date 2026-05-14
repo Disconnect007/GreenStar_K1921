@@ -8,7 +8,7 @@
 #include "uart_tx.h"
 #include "modbus_sbs_regs.h"
 #include "modbus_funcs.h"
-#include "esp_comm.h"
+#include "esp_comm.h"            // только ESP_ProcessRequest и глобальные переменные
 #include "temp.h"
 #include "power_mgmt.h"
 #include "bitmaps.h"
@@ -79,7 +79,6 @@ static void periph_init(void)
     SystemCoreClockUpdate();
     IWDT_Init(15000);
     led_init();
-    ESP_InitResetPin();
     UART1_init();
     UART2_init();
     I2C_init();
@@ -116,7 +115,7 @@ int main(void)
         OLED_DrawBitmap(115, 0, 12, 16, battery[i], false);
         mtimer_sleep(100);
     }
-    OLED_DrawBitmap(0, 0, 12, 16, wifi, false);
+    OLED_DrawBitmap(0, 0, 12, 16, wifi, false);   // иконка Wi-Fi (статично)
     OLED_setpos(0, 3);
     OLED_printS("H10", false);
     OLED_setpos(36, 3);
@@ -135,10 +134,9 @@ int main(void)
     TMR32_init(3000);
     InterruptEnable();
 
-    bool prev_esp_online = true;
-
     while(1)
     {
+        /* ожидание флага таймера */
         while (!tmr_trigger) {
             InterruptDisable();
             if (!tmr_trigger) {
@@ -153,50 +151,23 @@ int main(void)
         }
         tmr_trigger = false;
 
-        bool current_online = ESP_IsOnline();
-        if (current_online != prev_esp_online) {
-            if (current_online) {
-                OLED_DrawBitmap(0, 0, 12, 16, wifi, false);
-            } else {
-                OLED_ClearRect(0, 0, 12, 16);
-            }
-            prev_esp_online = current_online;
+        /* если была команда START или CLEAR – сбрасываем историю измерений */
+        if (g_restart_measurement) {
+            first_measure = true;
+            prev_ltime = 0.0;
+            g_restart_measurement = false;
         }
 
         OLED_setpos(72, 7);
         OLED_printF(Get_Temp_Celsius(), 2, false);
 
-        switch(err) {
-            case 0:
-                OLED_setpos(88, 5);
-                OLED_printS("НОРМА", true);
-                break;
-            case 1: 
-                OLED_setpos(32, 3);
-                OLED_printS(" Н/Д ", false);
-                OLED_setpos(88, 5);
-                OLED_printS("КОД 1", true); 
-                break;
-            case 2:
-                OLED_setpos(88, 5);
-                OLED_printS("СТОП", true);
-                break;
-            case 4:
-                OLED_setpos(88, 5);
-                OLED_printS("КОД 2", true);
-                break;
-            default:
-                OLED_setpos(88, 5);
-                OLED_printS("  Н/Д", true);
-                break;
-        }
-
+        /* ==== чтение Modbus и расчёт дозы ==== */
         success = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
         if (!success) {
-            ESP_SendErrorAck();      
+            g_system_state = SYS_STATE_ERROR;
+            err = 1;
             first_measure = true;
-            err = 1; 
-            continue; 
+            goto update_display;
         }
         
         InterruptDisable();
@@ -204,27 +175,29 @@ int main(void)
         success = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
         uint64_t sp_rec_time = mtimer_get_raw_time() - t_sp_start;
         if (!success) { 
-            ESP_SendErrorAck();
-            first_measure = true; 
-            err = 1; 
-            continue; 
+            g_system_state = SYS_STATE_ERROR;
+            first_measure = true;
+            err = 1;
+            InterruptEnable();
+            goto update_display;
         }
 
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
         if (!success || ltime <= 0.0) {
-            ESP_SendErrorAck();
+            g_system_state = SYS_STATE_ERROR;
             first_measure = true;
-            err = 1;  
-            continue; 
+            err = 1;
+            InterruptEnable();
+            goto update_display;
         }
         InterruptEnable();
         
         success = MODBUS_ReadFloat(SBS_ADDR, SBS_INPRATE_REG, &inprate);
         if (!success) {
-            ESP_SendErrorAck();
+            g_system_state = SYS_STATE_ERROR;
             first_measure = true;
-            err = 1;  
-            continue; 
+            err = 1;
+            goto update_display;
         }
 
         switch (nchan) {
@@ -237,50 +210,88 @@ int main(void)
             default:   k_idx = -1;
         }
 
-        if (k_idx == -1) {err = 1; continue;}
-        if (ltime <= MIN_DELTA) {first_measure = true; continue;} 
+        if (k_idx == -1) {
+            g_system_state = SYS_STATE_ERROR;
+            err = 1;
+            goto update_display;
+        }
+        if (ltime <= MIN_DELTA) {
+            first_measure = true;
+            goto update_display;
+        }
+
         if (first_measure) {
             ader = DoseRateInstant(spectr, nchan, ltime, DZ, k_idx, sp_rec_time);
-            if (ader < 0) {IWDT_Reset(); continue;}
-            ESP_SendFormattedAck("s,f,f,f", nchan, ader, ltime, inprate);
+            if (ader < 0) {
+                IWDT_Reset();
+                goto update_display;
+            }
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
             first_measure = false;
-            aderlen = float_num_len(ader, 2);
-            OLED_setpos((128 - aderlen * 8) / 2 - 12, 3);
-            OLED_printF(ader, 2, false);
         } else {
             float delta_ltime = ltime - prev_ltime;
             if (delta_ltime < -TIME_EPS) {
                 first_measure = true;
                 IWDT_Reset();
-                continue;
+                goto update_display;
             }
             if (delta_ltime <= TIME_EPS) {
-                ESP_SendStopAck();
+                g_system_state = SYS_STATE_STOPPED;
                 err = 2;
-                IWDT_Reset(); 
-                continue;   
+                IWDT_Reset();
+                goto update_display;
             }
             if (delta_ltime < MIN_DELTA) {
                 IWDT_Reset();
-                continue;
+                goto update_display;
             }
-
             ader = DoseRatediff(spectr, prev_spectr, nchan, delta_ltime, DZ, k_idx);
-            ESP_SendFormattedAck("s,f,f,f", nchan, ader, ltime, inprate);
             memcpy(prev_spectr, spectr, nchan * sizeof(uint32_t));
             prev_ltime = ltime;
+        }
+
+        g_system_state = SYS_STATE_OK;
+        err = 0;
+
+update_display:
+        /* сохраняем данные для ответа ESP */
+        g_nchan   = nchan;
+        g_ader    = (err == 1) ? 0.0f : ader;   // при ошибке обнуляем дозу
+        g_ltime   = ltime;
+        g_inprate = inprate;
+
+        /* отображение статуса на OLED */
+        switch(err) {
+            case 0:
+                OLED_setpos(88, 5);
+                OLED_printS("НОРМА", true);
+                break;
+            case 1:
+                OLED_setpos(32, 3);
+                OLED_printS(" Н/Д ", false);
+                OLED_setpos(88, 5);
+                OLED_printS("ОШИБКА", true);
+                break;
+            case 2:
+                OLED_setpos(88, 5);
+                OLED_printS("СТОП", true);
+                break;
+            default:
+                OLED_setpos(88, 5);
+                OLED_printS("  Н/Д", true);
+                break;
+        }
+
+        if (ader >= 0.0f && err != 1) {
             aderlen = float_num_len(ader, 2);
             OLED_setpos((128 - aderlen * 8) / 2 - 12, 3);
             OLED_printF(ader, 2, false);
         }
 
-        if (ESP_IsError()) {
-            err = 4;
-        } else {
-            err = 0;
-        }
+        /* ==== обработка запроса от ESP ==== */
+        ESP_ProcessRequest();
+
         IWDT_Reset();
     }
     return 0;
