@@ -152,7 +152,7 @@ void UART2_FlushRx(void)
 {
     uint16_t cnt = 0;
     while (UART2_DataAvailable() && (cnt < UART_FLUSH_MAX_BYTES)) {
-        (void)UART_RecieveData(UART1);
+        (void)UART_RecieveData(UART2);
         cnt++;
     }
 }
