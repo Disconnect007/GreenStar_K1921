@@ -11,6 +11,6 @@
 #define ENK_COUNT 6
 
 void DoseCalc_Init(void);
-bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_time, float ltime, float inprate, float *ader);
+bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_time, float ltime, float *ader);
 
 #endif

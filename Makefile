@@ -22,7 +22,8 @@ C_SOURCES =  \
 	platform/Device/K1921VG015/source/sys_init.c \
 	platform/Device/K1921VG015/source/system_k1921vg015.c \
 	platform/Device/K1921VG015/source/esp_comm.c \
-	platform/Device/K1921VG015/source/dose_calc.c 
+	platform/Device/K1921VG015/source/dose_calc.c \
+	platform/Device/K1921VG015/source/power_mgmt.c
 
 # Неактивные сурсы	platform/Device/K1921VG015/source/i2c_tx.c platform/Device/K1921VG015/source/oled_small.c platform/Device/K1921VG015/source/plib015_i2c.c platform/retarget/Template/K1921VG015/retarget.c platform/Device/K1921VG015/source/power_mgmt.c 
 

@@ -268,7 +268,7 @@ void InterruptEnable()
 	// Разрешаем все прерывания в machine mode
 	PLIC_SetThreshold (Plic_Mach_Target, 0);
     // Выключаем прерывание от MTIMER (если MTIMER используется в проекте - закомментировать следующую строку)
-    clear_csr(mie, MIE_MTIMER);
+    //clear_csr(mie, MIE_MTIMER);
     // Разрешаем внешнее прерывание (PLIC) в machine mode
     set_csr(mie, MIE_MEXTERNAL);
     // Разрешаем прерывания на глобальном уровне

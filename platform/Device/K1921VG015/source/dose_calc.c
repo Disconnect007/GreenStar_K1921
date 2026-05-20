@@ -20,7 +20,7 @@ void DoseCalc_Init(void)
     prev_ltime = 0.0;
 }
 
-bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_time, float ltime, float inprate, float *ader)
+bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_time, float ltime, float *ader)
 {
     switch (nchan) {
         case 128:  k_idx = 0; break;

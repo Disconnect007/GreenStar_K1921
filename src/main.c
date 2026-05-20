@@ -60,6 +60,19 @@ static void TMR32_Init_WDT(uint32_t period_ms)
     PLIC_IntEnable(Plic_Mach_Target, IsrVect_IRQ_TMR32);
 }
 
+static void UART2_IRQHandler(void)
+{
+    UART2->ICR_bit.RTIC = 1;
+}
+
+static void UART2_EnableRXInterrupt(void)
+{
+    UART2->IMSC_bit.RTIM = 1;
+
+    PLIC_SetIrqHandler(Plic_Mach_Target, IsrVect_IRQ_UART2, UART2_IRQHandler);
+    PLIC_SetPriority(IsrVect_IRQ_UART2, 0x2); 
+    PLIC_IntEnable(Plic_Mach_Target, IsrVect_IRQ_UART2);
+}
 static void periph_init(void) 
 {
     SystemInit();
@@ -68,6 +81,7 @@ static void periph_init(void)
     led_init();
     UART1_init();
     UART2_init();
+    UART2_EnableRXInterrupt();
     I2C_init();
     OLED_init();
     adcsar_init(TSENSOR_ISRC_INT);
@@ -160,7 +174,7 @@ int main(void)
     OLED_setpos(112, 7); OLED_printS("°С", false);
 
     InterruptEnable();
-    TMR32_Init_WDT(3000); 
+    TMR32_Init_WDT(1000); 
 
     while (1) {
 
@@ -191,11 +205,9 @@ int main(void)
             tmr_wdt_trigger = false;
             IWDT_Reset();
         }
+        IWDT_Reset();
 
-        __asm volatile ("WFI");
-        __asm("NOP"); 
-        __asm("NOP"); 
-        __asm("NOP");
+        PM_EnterMode(PM_IDLE); 
     }
     
     return 0;

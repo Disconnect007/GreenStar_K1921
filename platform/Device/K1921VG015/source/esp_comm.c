@@ -185,7 +185,7 @@ void ESP_HandleDataRequest(void) {
 
         if (read_ok) {
             float ader;
-            bool calc_ok = DoseCalc_Perform(nchan, spectr, sp_rec_time, ltime, inprate, &ader);
+            bool calc_ok = DoseCalc_Perform(nchan, spectr, sp_rec_time, ltime, &ader);
             if (calc_ok) {
                 g_nchan   = nchan;
                 g_ader    = ader;

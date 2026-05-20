@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 // Идентификаторы режимов
 typedef enum {
     PM_RUN = 0,
