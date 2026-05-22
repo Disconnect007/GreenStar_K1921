@@ -115,7 +115,3 @@ flash: erase
 
 erase: build
 	$(OCD) -f $(OPENOCD_INTERFACE) -f $(OPENOCD_TARGET) -c init -c halt -c "flash erase_sector 0 0 last" -c exit
-
-
-gdb-server:
-	$(OCD) -f $(OPENOCD_INTERFACE) -f $(OPENOCD_TARGET) -c "gdb_port 3333"

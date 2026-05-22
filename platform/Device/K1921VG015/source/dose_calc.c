@@ -90,3 +90,9 @@ static float DoseRatediff(const uint32_t *s, const uint32_t *ps, uint16_t n, flo
     double rate = (sum * dz) / dt;
     return (float)rate;
 }
+
+const char* GetRadStatusText(float ader) {
+    if (ader < 0.6f)  return "НОРМА";      
+    if (ader < 1.2f)  return "ВНИМА";   
+    return "ОПАСН";                          
+}

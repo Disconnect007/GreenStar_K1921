@@ -140,12 +140,14 @@ void ESP_ExecuteNextCommand(void) {
     switch (cmd) {
         case CMD_START:
             ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_START);
+            if (ok) DoseCalc_Init();   
             break;
         case CMD_STOP:
             ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
             break;
         case CMD_CLEAR:
             ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
+            if (ok) DoseCalc_Init();   
             break;
         case CMD_SET_CHANNELS:
             ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_NCHANNELS_REG, 128 << param);
@@ -155,12 +157,25 @@ void ESP_ExecuteNextCommand(void) {
             break;
     }
 
-    uint8_t current_state = ReadSbsState();
+    uint8_t current_state;
+    if (ok) {
+        mtimer_sleep(50);                // wait for SBS register to settle
+        current_state = ReadSbsState();
+    } else {
+        current_state = ReadSbsState();
+    }
     last_cmd_ack = ok ? ACK_SUCCESS : ACK_ERROR;
 
     if (ok) {
-        if (current_state == SBS_STATE_ACQ) disp_state = DISP_OK;
-        else disp_state = DISP_STOPPED;
+        if (current_state == SBS_STATE_ACQ) {
+            disp_state = DISP_OK;
+        } else if (current_state == SBS_STATE_STOP) {
+            disp_state = DISP_STOPPED;
+        } else if (current_state == SBS_STATE_CLEAR) {
+            disp_state = DISP_ND;
+        } else {
+            disp_state = DISP_STOPPED;   // fallback
+        }
     } else {
         disp_state = DISP_WRITE_ERROR;
     }
@@ -203,7 +218,11 @@ void ESP_HandleDataRequest(void) {
         disp_state = DISP_READ_ERROR;
         SendResponse(ACK_ERROR, false, current_state);
     } else {
-        disp_state = DISP_STOPPED;
+        if (current_state == SBS_STATE_STOP) {
+            disp_state = DISP_STOPPED;
+        } else {  
+            disp_state = DISP_ND;
+        }
         SendResponse(ACK_SUCCESS, false, current_state);
     }
 }

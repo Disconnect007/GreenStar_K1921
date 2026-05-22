@@ -18,6 +18,9 @@
 #define LED0_PIN  12
 #define LED0_MSK  (1 << LED0_PIN)
 
+#define DOSE_NORMAL_THR  0.6f
+#define DOSE_WARNING_THR 1.2f
+
 static volatile bool tmr_wdt_trigger = false;
 
 static void led_init(void) 
@@ -85,8 +88,7 @@ static void periph_init(void)
     I2C_init();
     OLED_init();
     adcsar_init(TSENSOR_ISRC_INT);
-
-    // Инициализация SBS: останов и очистка
+    
     MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
     mtimer_sleep(50);
     MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
@@ -109,9 +111,11 @@ static void update_oled(void)
     uint8_t error_code = 5;
 
     switch (state) {
-        case DISP_OK:
-            strcpy(st_text, "НОРМА");
-            error_code = 0;
+        case DISP_OK: 
+            if(g_ader < DOSE_NORMAL_THR) { strcpy(st_text, "НОРМА"); error_code = 0; break;}
+            if(g_ader < DOSE_WARNING_THR) { strcpy(st_text, "ВНИМА"); error_code = 0; break;}
+            strcpy(st_text, "ОПАСН"); 
+            error_code = 0; 
             break;
         case DISP_WRITE_ERROR:
             strcpy(st_text, "КОД 1");
@@ -134,9 +138,6 @@ static void update_oled(void)
             error_code = 5;
             break;
     }
-
-    OLED_setpos(72, 7);
-    OLED_printF(Get_Temp_Celsius(), 2, false);
 
     OLED_setpos(88, 5);
     OLED_printS(st_text, true);
@@ -174,38 +175,28 @@ int main(void)
     OLED_setpos(112, 7); OLED_printS("°С", false);
 
     InterruptEnable();
-    TMR32_Init_WDT(1000); 
+    TMR32_Init_WDT(10000); 
 
     while (1) {
 
-     // 1. Приём запросов от ESP (без проверки наличия данных – таймауты внутри)
         ESP_ProcessRequest();
 
-        // 2. Выполняем ВСЕ команды из очереди, пока она не опустеет
         while (!ESP_QueueEmpty()) {
             ESP_ExecuteNextCommand();
         }
 
-        // 3. Обрабатываем запрос данных (если флаг установлен)
         if (g_data_requested) {
             ESP_HandleDataRequest();
             g_data_requested = false;
-        }
-
-        // 4. Обновляем OLED только при изменениях
-        static DisplayState_t prev_state = DISP_ND;
-        DisplayState_t curr_state = ESP_GetDisplayState();
-        if (curr_state != prev_state) {
             update_oled();
-            prev_state = curr_state;
         }
 
-        // 5. Сброс WDT по таймерному флагу
         if (tmr_wdt_trigger) {
             tmr_wdt_trigger = false;
             IWDT_Reset();
+            OLED_setpos(72, 7);
+            OLED_printF(Get_Temp_Celsius(), 2, false);
         }
-        IWDT_Reset();
 
         PM_EnterMode(PM_IDLE); 
     }

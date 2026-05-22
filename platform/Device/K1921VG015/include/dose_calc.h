@@ -12,5 +12,6 @@
 
 void DoseCalc_Init(void);
 bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_time, float ltime, float *ader);
+const char* GetRadStatusText(float ader);
 
 #endif
