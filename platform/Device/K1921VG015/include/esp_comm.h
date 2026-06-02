@@ -20,7 +20,7 @@
 #define SBS_STATE_ACQ      2
 
 #define CMD_QUEUE_SIZE     8
-
+ 
 typedef struct {
     uint8_t cmd;
     uint8_t param;

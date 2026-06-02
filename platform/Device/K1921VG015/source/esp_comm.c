@@ -2,9 +2,13 @@
 #include "uart_tx.h"
 #include "modbus_funcs.h"
 #include "modbus_sbs_regs.h"
+#include "modbus_crc.h"
 #include "mtimer.h"
 #include "dose_calc.h"
 #include <string.h>
+
+extern const double ENK0[];
+extern const double ENK1[];
 
 int16_t g_nchan   = 0;
 float   g_ader    = 0.0f;
@@ -159,7 +163,7 @@ void ESP_ExecuteNextCommand(void) {
 
     uint8_t current_state;
     if (ok) {
-        mtimer_sleep(50);                // wait for SBS register to settle
+        mtimer_sleep(50);              
         current_state = ReadSbsState();
     } else {
         current_state = ReadSbsState();
@@ -174,7 +178,7 @@ void ESP_ExecuteNextCommand(void) {
         } else if (current_state == SBS_STATE_CLEAR) {
             disp_state = DISP_ND;
         } else {
-            disp_state = DISP_STOPPED;   // fallback
+            disp_state = DISP_STOPPED;  
         }
     } else {
         disp_state = DISP_WRITE_ERROR;
@@ -183,16 +187,17 @@ void ESP_ExecuteNextCommand(void) {
     SendResponse(last_cmd_ack, false, current_state);
 }
 
-void ESP_HandleDataRequest(void) {
+void ESP_HandleDataRequest(void)
+{
     int16_t nchan;
     float   ltime, inprate;
     bool    read_ok = true;
 
     if (read_ok) read_ok = MODBUS_ReadInt16(SBS_ADDR, SBS_NCHANNELS_REG, &nchan);
     if (read_ok) {
-        uint32_t spectr[4096];
+        static uint32_t raw[4096]; 
         uint64_t t_start = mtimer_get_raw_time();
-        read_ok = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, spectr, 60);
+        read_ok = MODBUS_ReadSpectrum(SBS_ADDR, SBS_SP0_CHANNEL, nchan, raw, 60);
         uint64_t sp_rec_time = mtimer_get_raw_time() - t_start;
 
         if (read_ok) read_ok = MODBUS_ReadFloat(SBS_ADDR, SBS_LTIME_REG, &ltime);
@@ -200,31 +205,99 @@ void ESP_HandleDataRequest(void) {
 
         if (read_ok) {
             float ader;
-            bool calc_ok = DoseCalc_Perform(nchan, spectr, sp_rec_time, ltime, &ader);
+            bool calc_ok = DoseCalc_Perform(nchan, raw, sp_rec_time, ltime, &ader);
+
+            g_nchan   = nchan;
+            g_ltime   = ltime;
+            g_inprate = inprate;
+
             if (calc_ok) {
-                g_nchan   = nchan;
-                g_ader    = ader;
-                g_ltime   = ltime;
-                g_inprate = inprate;
-                disp_state = DISP_OK;
-                SendResponse(ACK_SUCCESS, true, SBS_STATE_ACQ);
-                return;
+                g_ader = ader;
+            } else {
+                g_ader = 0.0f;
             }
+
+            uint8_t k_idx;
+            switch (nchan) {
+                case 128:  k_idx = 0; break;
+                case 256:  k_idx = 1; break;
+                case 512:  k_idx = 2; break;
+                case 1024: k_idx = 3; break;
+                case 2048: k_idx = 4; break;
+                case 4096: k_idx = 5; break;
+                default:   k_idx = 0; break;
+            }
+            const double enk0 = ENK0[k_idx];
+            const double enk1 = ENK1[k_idx];
+
+            uint32_t top_counts[5] = {0};
+            int      top_chan[5]    = {0};
+
+            for (int i = 0; i < nchan; i++) {
+                uint32_t c = raw[i];
+                for (int p = 0; p < 5; p++) {
+                    if (c > top_counts[p]) {
+                        for (int q = 4; q > p; q--) {
+                            top_counts[q] = top_counts[q-1];
+                            top_chan[q]   = top_chan[q-1];
+                        }
+                        top_counts[p] = c;
+                        top_chan[p]   = i;
+                        break;
+                    }
+                }
+            }
+
+            uint8_t resp[46];
+            resp[0] = ACK_SUCCESS;
+            resp[1] = ((calc_ok ? 1 : 0) << 4) | SBS_STATE_ACQ;
+            resp[2] = g_nchan & 0xFF;
+            resp[3] = (g_nchan >> 8) & 0xFF;
+
+            uint32_t ader_raw = (uint32_t)(g_ader * 1e6f);
+            resp[4] = ader_raw & 0xFF;
+            resp[5] = (ader_raw >> 8) & 0xFF;
+            resp[6] = (ader_raw >> 16) & 0xFF;
+            resp[7] = (ader_raw >> 24) & 0xFF;
+
+            uint32_t ltime_raw = (uint32_t)(g_ltime * 1e6f);
+            resp[8] = ltime_raw & 0xFF;
+            resp[9] = (ltime_raw >> 8) & 0xFF;
+            resp[10] = (ltime_raw >> 16) & 0xFF;
+            resp[11] = (ltime_raw >> 24) & 0xFF;
+
+            uint32_t inprate_raw = (uint32_t)(g_inprate * 1e6f);
+            resp[12] = inprate_raw & 0xFF;
+            resp[13] = (inprate_raw >> 8) & 0xFF;
+            resp[14] = (inprate_raw >> 16) & 0xFF;
+            resp[15] = (inprate_raw >> 24) & 0xFF;
+
+            for (int p = 0; p < 5; p++) {
+                uint32_t cnt = top_counts[p];
+                resp[16 + p*6 + 0] = cnt & 0xFF;
+                resp[16 + p*6 + 1] = (cnt >> 8) & 0xFF;
+                resp[16 + p*6 + 2] = (cnt >> 16) & 0xFF;
+                resp[16 + p*6 + 3] = (cnt >> 24) & 0xFF;
+
+                double e_kev = enk0 + enk1 * top_chan[p];
+                uint16_t energy_raw = (uint16_t)(e_kev * 10.0 + 0.5);
+                resp[16 + p*6 + 4] = energy_raw & 0xFF;
+                resp[16 + p*6 + 5] = (energy_raw >> 8) & 0xFF;
+            }
+
+            UART2_SendBuffer(resp, sizeof(resp));
+            disp_state = DISP_OK;
+            return;
         }
     }
 
-    uint8_t current_state = ReadSbsState();
-    if (current_state == SBS_STATE_ACQ) {
-        disp_state = DISP_READ_ERROR;
-        SendResponse(ACK_ERROR, false, current_state);
-    } else {
-        if (current_state == SBS_STATE_STOP) {
-            disp_state = DISP_STOPPED;
-        } else {  
-            disp_state = DISP_ND;
-        }
-        SendResponse(ACK_SUCCESS, false, current_state);
-    }
+    // Ошибка Modbus
+    uint8_t resp[16];
+    resp[0] = ACK_ERROR;
+    resp[1] = 0x00;
+    memset(&resp[2], 0, 14);
+    UART2_SendBuffer(resp, sizeof(resp));
+    disp_state = DISP_READ_ERROR;
 }
 
 DisplayState_t ESP_GetDisplayState(void) {

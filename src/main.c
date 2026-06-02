@@ -18,9 +18,6 @@
 #define LED0_PIN  12
 #define LED0_MSK  (1 << LED0_PIN)
 
-#define DOSE_NORMAL_THR  0.6f
-#define DOSE_WARNING_THR 1.2f
-
 static volatile bool tmr_wdt_trigger = false;
 
 static void led_init(void) 
@@ -112,9 +109,7 @@ static void update_oled(void)
 
     switch (state) {
         case DISP_OK: 
-            if(g_ader < DOSE_NORMAL_THR) { strcpy(st_text, "НОРМА"); error_code = 0; break;}
-            if(g_ader < DOSE_WARNING_THR) { strcpy(st_text, "ВНИМА"); error_code = 0; break;}
-            strcpy(st_text, "ОПАСН"); 
+            strcpy(st_text, "   OK"); 
             error_code = 0; 
             break;
         case DISP_WRITE_ERROR:
@@ -184,6 +179,7 @@ int main(void)
         while (!ESP_QueueEmpty()) {
             ESP_ExecuteNextCommand();
         }
+        update_oled();
 
         if (g_data_requested) {
             ESP_HandleDataRequest();
