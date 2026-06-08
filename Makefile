@@ -2,7 +2,7 @@
 
 TARGET = firmware
 
-OPT = -Og
+OPT = -O0
 
 BUILD_DIR = build
 
@@ -23,7 +23,8 @@ C_SOURCES =  \
 	platform/Device/K1921VG015/source/system_k1921vg015.c \
 	platform/Device/K1921VG015/source/esp_comm.c \
 	platform/Device/K1921VG015/source/dose_calc.c \
-	platform/Device/K1921VG015/source/power_mgmt.c
+	platform/Device/K1921VG015/source/power_mgmt.c \
+	platform/Device/K1921VG015/source/peak_finder.c
 
 # Неактивные сурсы	platform/Device/K1921VG015/source/i2c_tx.c platform/Device/K1921VG015/source/oled_small.c platform/Device/K1921VG015/source/plib015_i2c.c platform/retarget/Template/K1921VG015/retarget.c platform/Device/K1921VG015/source/power_mgmt.c 
 
@@ -45,7 +46,7 @@ SZ = "$(GCC_PATH)/$(PREFIX)size"
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 
-MCU = -march=rv32imfc -mabi=ilp32f -msmall-data-limit=8 -mstrict-align -mno-save-restore -Og -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -fno-builtin -flto -DSELF_TIMED=1 -Wall -Wextra -g3 -ggdb -DHSECLK_VAL=16000000 -DRETARGET -DSYSCLK_HSE -DCKO_PLL0
+MCU = -lm -march=rv32imfc -mabi=ilp32f -msmall-data-limit=8 -mstrict-align -mno-save-restore -Og -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -fno-builtin -flto -DSELF_TIMED=1 -Wall -Wextra -g3 -ggdb -DHSECLK_VAL=16000000 -DRETARGET -DSYSCLK_HSE -DCKO_PLL0
 
 C_INCLUDES =  \
 	-I. \

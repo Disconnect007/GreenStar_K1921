@@ -5,6 +5,7 @@
 #include "modbus_crc.h"
 #include "mtimer.h"
 #include "dose_calc.h"
+#include "peak_finder.h"
 #include <string.h>
 
 extern const double ENK0[];
@@ -210,12 +211,7 @@ void ESP_HandleDataRequest(void)
             g_nchan   = nchan;
             g_ltime   = ltime;
             g_inprate = inprate;
-
-            if (calc_ok) {
-                g_ader = ader;
-            } else {
-                g_ader = 0.0f;
-            }
+            g_ader    = calc_ok ? ader : 0.0f;
 
             uint8_t k_idx;
             switch (nchan) {
@@ -230,22 +226,19 @@ void ESP_HandleDataRequest(void)
             const double enk0 = ENK0[k_idx];
             const double enk1 = ENK1[k_idx];
 
-            uint32_t top_counts[5] = {0};
-            int      top_chan[5]    = {0};
+            PeakInfo peaks[100];
+            int npeaks = find_peaks_simple(raw, nchan, enk0, enk1, 4.0f, peaks, 100);
 
-            for (int i = 0; i < nchan; i++) {
-                uint32_t c = raw[i];
-                for (int p = 0; p < 5; p++) {
-                    if (c > top_counts[p]) {
-                        for (int q = 4; q > p; q--) {
-                            top_counts[q] = top_counts[q-1];
-                            top_chan[q]   = top_chan[q-1];
-                        }
-                        top_counts[p] = c;
-                        top_chan[p]   = i;
-                        break;
-                    }
+            PeakInfo top[5];
+            int top_count = 0;
+            for (int i = 0; i < npeaks && top_count < 5; i++) {
+                int pos = top_count;
+                while (pos > 0 && peaks[i].max_count > top[pos-1].max_count) {
+                    top[pos] = top[pos-1];
+                    pos--;
                 }
+                top[pos] = peaks[i];
+                if (top_count < 5) top_count++;
             }
 
             uint8_t resp[46];
@@ -255,34 +248,31 @@ void ESP_HandleDataRequest(void)
             resp[3] = (g_nchan >> 8) & 0xFF;
 
             uint32_t ader_raw = (uint32_t)(g_ader * 1e6f);
-            resp[4] = ader_raw & 0xFF;
-            resp[5] = (ader_raw >> 8) & 0xFF;
-            resp[6] = (ader_raw >> 16) & 0xFF;
-            resp[7] = (ader_raw >> 24) & 0xFF;
+            resp[4] = ader_raw & 0xFF; resp[5] = (ader_raw >> 8) & 0xFF;
+            resp[6] = (ader_raw >> 16) & 0xFF; resp[7] = (ader_raw >> 24) & 0xFF;
 
             uint32_t ltime_raw = (uint32_t)(g_ltime * 1e6f);
-            resp[8] = ltime_raw & 0xFF;
-            resp[9] = (ltime_raw >> 8) & 0xFF;
-            resp[10] = (ltime_raw >> 16) & 0xFF;
-            resp[11] = (ltime_raw >> 24) & 0xFF;
+            resp[8] = ltime_raw & 0xFF; resp[9] = (ltime_raw >> 8) & 0xFF;
+            resp[10] = (ltime_raw >> 16) & 0xFF; resp[11] = (ltime_raw >> 24) & 0xFF;
 
             uint32_t inprate_raw = (uint32_t)(g_inprate * 1e6f);
-            resp[12] = inprate_raw & 0xFF;
-            resp[13] = (inprate_raw >> 8) & 0xFF;
-            resp[14] = (inprate_raw >> 16) & 0xFF;
-            resp[15] = (inprate_raw >> 24) & 0xFF;
+            resp[12] = inprate_raw & 0xFF; resp[13] = (inprate_raw >> 8) & 0xFF;
+            resp[14] = (inprate_raw >> 16) & 0xFF; resp[15] = (inprate_raw >> 24) & 0xFF;
 
             for (int p = 0; p < 5; p++) {
-                uint32_t cnt = top_counts[p];
-                resp[16 + p*6 + 0] = cnt & 0xFF;
-                resp[16 + p*6 + 1] = (cnt >> 8) & 0xFF;
-                resp[16 + p*6 + 2] = (cnt >> 16) & 0xFF;
-                resp[16 + p*6 + 3] = (cnt >> 24) & 0xFF;
+                if (p < top_count) {
+                    uint32_t cnt = top[p].max_count;
+                    resp[16 + p*6 + 0] = cnt & 0xFF;
+                    resp[16 + p*6 + 1] = (cnt >> 8) & 0xFF;
+                    resp[16 + p*6 + 2] = (cnt >> 16) & 0xFF;
+                    resp[16 + p*6 + 3] = (cnt >> 24) & 0xFF;
 
-                double e_kev = enk0 + enk1 * top_chan[p];
-                uint16_t energy_raw = (uint16_t)(e_kev * 10.0 + 0.5);
-                resp[16 + p*6 + 4] = energy_raw & 0xFF;
-                resp[16 + p*6 + 5] = (energy_raw >> 8) & 0xFF;
+                    uint16_t e_raw = (uint16_t)(top[p].energy_keV * 10.0 + 0.5);
+                    resp[16 + p*6 + 4] = e_raw & 0xFF;
+                    resp[16 + p*6 + 5] = (e_raw >> 8) & 0xFF;
+                } else {
+                    memset(&resp[16 + p*6], 0, 6);
+                }
             }
 
             UART2_SendBuffer(resp, sizeof(resp));
@@ -291,7 +281,6 @@ void ESP_HandleDataRequest(void)
         }
     }
 
-    // Ошибка Modbus
     uint8_t resp[16];
     resp[0] = ACK_ERROR;
     resp[1] = 0x00;
