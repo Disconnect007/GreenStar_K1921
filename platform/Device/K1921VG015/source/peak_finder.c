@@ -6,11 +6,9 @@ int find_peaks_simple(const uint32_t *spectrum, uint16_t n_channels,
                       float peak_threshold,
                       PeakInfo *peaks, uint8_t max_peaks)
 {
-    /* Проверка входных параметров */
     if (!spectrum || !peaks || max_peaks <= 0 || n_channels < 3 || n_channels > 4096)
         return 0;
 
-    /* Статические буферы – выделяются один раз, занимают 3×4096×4 = 48 кБ */
     static float work_sm[4096];
     static float work_tmp[4096];
     static float work_bg[4096];

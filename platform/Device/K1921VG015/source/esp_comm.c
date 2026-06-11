@@ -144,18 +144,18 @@ void ESP_ExecuteNextCommand(void) {
     bool ok = false;
     switch (cmd) {
         case CMD_START:
-            ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_START);
+            ok = MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_START);
             if (ok) DoseCalc_Init();   
             break;
         case CMD_STOP:
-            ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
+            ok = MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
             break;
         case CMD_CLEAR:
-            ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
+            ok = MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
             if (ok) DoseCalc_Init();   
             break;
         case CMD_SET_CHANNELS:
-            ok = MODBUS_WriteSingleReg(SBS_ADDR, SBS_NCHANNELS_REG, 128 << param);
+            ok = MODBUS_WriteInt16(SBS_ADDR, SBS_NCHANNELS_REG, 128 << param);
             break;
         default:
             ok = false;
@@ -227,7 +227,7 @@ void ESP_HandleDataRequest(void)
             const double enk1 = ENK1[k_idx];
 
             PeakInfo peaks[100];
-            int npeaks = find_peaks_simple(raw, nchan, enk0, enk1, 4.0f, peaks, 100);
+            int npeaks = find_peaks_simple(raw, nchan, enk0, enk1, 3.5f, peaks, 50);
 
             PeakInfo top[5];
             int top_count = 0;

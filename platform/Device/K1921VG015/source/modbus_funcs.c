@@ -3,165 +3,195 @@
 #include "uart_tx.h"
 #include "mtimer.h"
 
-// Формирование Modbus запроса на чтение регистров
-static uint8_t modbus_read_holding_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t reg_count, uint8_t *tx_buf)
+static uint16_t append_crc(uint8_t *buf, uint8_t len)
 {
-    tx_buf[0] = addr;
-    tx_buf[1] = code;
-    tx_buf[2] = Hi(reg_addr);
-    tx_buf[3] = Low(reg_addr);
-    tx_buf[4] = Hi(reg_count);
-    tx_buf[5] = Low(reg_count);
-
-    uint16_t crc = modbus_crc16(tx_buf, 6);
-    tx_buf[6] = Low(crc);
-    tx_buf[7] = Hi(crc);
-
-    return 8;
+    uint16_t crc = modbus_crc16(buf, len);
+    buf[len]   = Low(crc);
+    buf[len+1] = Hi(crc);
+    return len + 2;
 }
 
-// Формирование Modbus запроса на запись 1-го регистра
-static uint8_t modbus_write_single_reg_request(uint8_t addr, uint8_t code, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
+static uint8_t build_read_request(uint8_t addr, uint16_t reg, uint16_t count, uint8_t *out)
 {
-    tx_buf[0] = addr;
-    tx_buf[1] = code;
-    tx_buf[2] = Hi(reg_addr);
-    tx_buf[3] = Low(reg_addr);
-    tx_buf[4] = Hi(write_data);
-    tx_buf[5] = Low(write_data);
-
-    uint16_t crc = modbus_crc16(tx_buf, 6);
-    tx_buf[6] = Low(crc);
-    tx_buf[7] = Hi(crc);
-
-    return 8;
+    out[0] = addr;
+    out[1] = 0x03;
+    out[2] = Hi(reg);
+    out[3] = Low(reg);
+    out[4] = Hi(count);
+    out[5] = Low(count);
+    return append_crc(out, 6);
 }
 
-// Запрос на чтение holding регистров
-static uint8_t modbus_read_holding(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *tx_buf)
+static uint8_t build_write_multiple_request(uint8_t addr, uint16_t reg, uint16_t count, const uint8_t *data, uint8_t *out)
 {
-    return modbus_read_holding_request(slave_addr, 0x03, reg_addr, num_registers, tx_buf);
+    uint8_t byte_count = count * 2;
+    out[0] = addr;
+    out[1] = 0x10;
+    out[2] = Hi(reg);
+    out[3] = Low(reg);
+    out[4] = Hi(count);
+    out[5] = Low(count);
+    out[6] = byte_count;
+    for (uint8_t i = 0; i < byte_count; i++)
+        out[7 + i] = data[i];
+    return append_crc(out, 7 + byte_count);
 }
 
-// Запрос на запись 1-го регистра
-static uint8_t modbus_write_single_reg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data, uint8_t *tx_buf)
+static bool validate_response(const uint8_t *resp, uint8_t len, uint8_t addr, uint8_t func, uint16_t min_len)
 {
-    return modbus_write_single_reg_request(slave_addr, 0x06, reg_addr, write_data, tx_buf);
+    if (len < min_len) return false;
+    if (resp[0] != addr || resp[1] != func) return false;
+    uint16_t crc_rx = (resp[len-1] << 8) | resp[len-2];
+    uint16_t crc_calc = modbus_crc16(resp, len - 2);
+    return crc_rx == crc_calc;
 }
 
-// Чтение блока регистров (до 120 регистров)
-bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *data)
+static bool send_and_receive(const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len,
+                             uint8_t max_rx, uint8_t addr, uint8_t func, uint16_t min_resp_len)
 {
-    uint8_t tx_buffer[8] = {},
-            rx_buffer[5 + MODBUS_MAX_BYTES_PER_READ + 2] = {};
-    uint16_t rx_len;
-    uint16_t expected_bytes;
-
-    if (num_registers < 1 || num_registers > MODBUS_MAX_REGISTERS_PER_READ) return false;
-    expected_bytes = num_registers * 2;
-
-    uint8_t tx_len = modbus_read_holding(slave_addr, reg_addr, num_registers, tx_buffer);
-
     for (uint8_t retry = 0; retry < MODBUS_MAX_RETRIES; retry++) {
         UART1_FlushRx();
-        UART1_SendBuffer(tx_buffer, tx_len);
-        rx_len = UART1_ReceiveBuffer(rx_buffer, sizeof(rx_buffer), MODBUS_TIMEOUT_MS, MODBUS_INTERCHAR_MS);
-
-        if (rx_len < 5 + expected_bytes) continue;
-        if (rx_buffer[0] != slave_addr || rx_buffer[1] != 0x03) continue;
-        if (rx_buffer[2] != expected_bytes) continue;
-
-        uint16_t received_crc = (rx_buffer[rx_len - 1] << 8) | rx_buffer[rx_len - 2];
-        uint16_t calculated_crc = modbus_crc16(rx_buffer, rx_len - 2);
-        if (received_crc != calculated_crc) continue;
-
-        for (uint16_t i = 0; i < expected_bytes; i++) {
-            data[i] = rx_buffer[3 + i];
-        }
-        return true;
+        UART1_SendBuffer((uint8_t*)tx, tx_len);
+        *rx_len = UART1_ReceiveBuffer(rx, max_rx, MODBUS_TIMEOUT_MS, MODBUS_INTERCHAR_MS);
+        if (validate_response(rx, *rx_len, addr, func, min_resp_len))
+            return true;
     }
     return false;
 }
 
-// Запись 1-го регистра
-bool MODBUS_WriteSingleReg(uint8_t slave_addr, uint16_t reg_addr, uint16_t write_data)
+// Преобразование из буфера (word swap, big-endian) в uint32_t
+static uint32_t bytes_to_uint32_word_swap(const uint8_t *bytes)
 {
-    uint8_t tx_buffer[8] = {}, 
-            rx_buffer[8] = {};
+    return ((uint32_t)bytes[2] << 24) | ((uint32_t)bytes[3] << 16) |
+           ((uint32_t)bytes[0] << 8)  | (uint32_t)bytes[1];
+}
+
+// Преобразование uint32_t в буфер (word swap, big-endian)
+static void uint32_to_bytes_word_swap(uint32_t val, uint8_t *out)
+{
+    out[0] = (val >> 8) & 0xFF;   
+    out[1] = val & 0xFF;           
+    out[2] = (val >> 24) & 0xFF;   
+    out[3] = (val >> 16) & 0xFF;   
+}
+
+static void int16_to_bytes_be(int16_t val, uint8_t *out)
+{
+    uint16_t uval = (uint16_t)val;
+    out[0] = Hi(uval);
+    out[1] = Low(uval);
+}
+
+static bool MODBUS_ReadMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, uint8_t *data)
+{
+    if (num_registers < 1 || num_registers > MODBUS_MAX_REGISTERS_PER_READ)
+        return false;
+
+    uint8_t tx[8];
+    uint8_t tx_len = build_read_request(slave_addr, reg_addr, num_registers, tx);
+
+    uint16_t expected_bytes = num_registers * 2;
+    uint16_t min_resp_len = 5 + expected_bytes;
+    uint8_t rx[5 + MODBUS_MAX_BYTES_PER_READ + 2];
     uint8_t rx_len;
 
-    uint8_t tx_len = modbus_write_single_reg(slave_addr, reg_addr, write_data, tx_buffer);
+    if (!send_and_receive(tx, tx_len, rx, &rx_len, sizeof(rx), slave_addr, 0x03, min_resp_len))
+        return false;
 
-    for (uint8_t retry = 0; retry < MODBUS_MAX_RETRIES; retry++) {
-        UART1_FlushRx();
-        UART1_SendBuffer(tx_buffer, tx_len);
-        rx_len = UART1_ReceiveBuffer(rx_buffer, sizeof(rx_buffer), MODBUS_TIMEOUT_MS, MODBUS_INTERCHAR_MS);
+    if (rx[2] != expected_bytes)
+        return false;
 
-        if (rx_len != tx_len) continue;
-        if (rx_buffer[0] != slave_addr || rx_buffer[1] != 0x06) continue;
-
-        uint16_t received_crc = (rx_buffer[rx_len - 1] << 8) | rx_buffer[rx_len - 2];
-        uint16_t calculated_crc = modbus_crc16(rx_buffer, rx_len - 2);
-        if (received_crc != calculated_crc) continue;
-
-        return true;
-    }
-    return false;
+    for (uint16_t i = 0; i < expected_bytes; i++)
+        data[i] = rx[3 + i];
+    return true;
 }
 
-
-// Преобразование 4 bytes big-endian для little-endian
-static uint32_t modbus_bytes_reorder(const uint8_t bytes[4])
+static bool MODBUS_WriteMultipleRegisters(uint8_t slave_addr, uint16_t reg_addr, uint16_t num_registers, const uint8_t *data)
 {
-    return (bytes[2] << 24) | (bytes[3] << 16) | (bytes[0] << 8) | bytes[1];
+    if (num_registers < 1 || num_registers > MODBUS_MAX_REGISTERS_PER_WRITE)
+        return false;
+
+    uint8_t tx[9 + MODBUS_MAX_REGISTERS_PER_WRITE * 2];
+    uint8_t tx_len = build_write_multiple_request(slave_addr, reg_addr, num_registers, data, tx);
+
+    uint8_t rx[8];
+    uint8_t rx_len;
+
+    if (!send_and_receive(tx, tx_len, rx, &rx_len, sizeof(rx), slave_addr, 0x10, 8))
+        return false;
+
+    return (rx[2] == Hi(reg_addr) && rx[3] == Low(reg_addr) &&
+            rx[4] == Hi(num_registers) && rx[5] == Low(num_registers));
 }
 
-// Чтение short int (2 bytes)
+/* ============================ Чтение ============================ */
+
 bool MODBUS_ReadInt16(uint8_t slave_addr, uint16_t reg_addr, int16_t *value)
 {
     uint8_t data[2];
-    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 1, data)) return false;
+    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 1, data))
+        return false;
     *value = (int16_t)((data[0] << 8) | data[1]);
     return true;
 }
 
-// Чтение int (4 bytes)
 bool MODBUS_ReadInt32(uint8_t slave_addr, uint16_t reg_addr, int32_t *value)
 {
     uint8_t data[4];
-    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 2, data)) return false;
-    uint32_t temp = modbus_bytes_reorder(data);
-    *value = (int32_t)temp;
+    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 2, data))
+        return false;
+    *value = (int32_t)bytes_to_uint32_word_swap(data);
     return true;
 }
 
-// Чтение float (4 bytes)
 bool MODBUS_ReadFloat(uint8_t slave_addr, uint16_t reg_addr, float *value)
 {
-    union FloatConverter conv;
     uint8_t data[4];
-    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 2, data)) return false;
-    conv.u32 = modbus_bytes_reorder(data);
+    if (!MODBUS_ReadMultipleRegisters(slave_addr, reg_addr, 2, data))
+        return false;
+    union FloatConverter conv = { .u32 = bytes_to_uint32_word_swap(data) };
     *value = conv.f32;
     return true;
 }
 
-// Преобразование 4 bytes big-endian для little-endian (для спектра)
+/* ============================ Запись ============================ */
+
+bool MODBUS_WriteInt16(uint8_t slave_addr, uint16_t reg_addr, int16_t value)
+{
+    uint8_t data[2];
+    int16_to_bytes_be(value, data);
+    return MODBUS_WriteMultipleRegisters(slave_addr, reg_addr, 1, data);
+}
+
+bool MODBUS_WriteInt32(uint8_t slave_addr, uint16_t reg_addr, int32_t value)
+{
+    uint8_t data[4];
+    uint32_to_bytes_word_swap((uint32_t)value, data);
+    return MODBUS_WriteMultipleRegisters(slave_addr, reg_addr, 2, data);
+}
+
+bool MODBUS_WriteFloat(uint8_t slave_addr, uint16_t reg_addr, float value)
+{
+    union FloatConverter conv = { .f32 = value };
+    uint8_t data[4];
+    uint32_to_bytes_word_swap(conv.u32, data);
+    return MODBUS_WriteMultipleRegisters(slave_addr, reg_addr, 2, data);
+}
+
+/* ============================ Функции для работы со спектром ============================ */
+
 static uint32_t spectrum_bytes_reorder(const uint8_t bytes[4])
 {
-    return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+    return ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
+           ((uint32_t)bytes[2] << 8)  | (uint32_t)bytes[3];
 }
 
-// Преобразование блока сырых данных спектра в массив unsigned int (4 bytes)
 static void convert_spectrum_block(uint8_t *src, uint32_t *dst, uint16_t count)
 {
-    for (uint16_t i = 0; i < count; i++) {
+    for (uint16_t i = 0; i < count; i++)
         dst[i] = spectrum_bytes_reorder(&src[i * 4]);
-    }
 }
 
-
-// Чтение спектра с настраиваемым размером блока
 bool MODBUS_ReadSpectrum(uint8_t slave_addr, uint16_t start_reg, uint16_t channels, uint32_t *spectrum, uint16_t block_size_channels)
 {
     if (block_size_channels > 60 || channels > 4096) return false;
@@ -171,23 +201,24 @@ bool MODBUS_ReadSpectrum(uint8_t slave_addr, uint16_t start_reg, uint16_t channe
     uint16_t current_reg = start_reg;
     uint32_t *spectrum_ptr = spectrum;
 
-    if (block_size_channels * REGS_PER_CHANNEL > MODBUS_MAX_REGISTERS_PER_READ) {
+    if (block_size_channels * REGS_PER_CHANNEL > MODBUS_MAX_REGISTERS_PER_READ)
         block_size_channels = MODBUS_MAX_REGISTERS_PER_READ / REGS_PER_CHANNEL;
-    }
 
     while (channels_remaining > 0) {
         uint16_t channels_in_block = (channels_remaining > block_size_channels) ? block_size_channels : channels_remaining;
         uint16_t regs_in_block = channels_in_block * REGS_PER_CHANNEL;
         uint8_t raw_data[regs_in_block * 2];
 
-        if (!MODBUS_ReadMultipleRegisters(slave_addr, current_reg, regs_in_block, raw_data)) return false;
+        if (!MODBUS_ReadMultipleRegisters(slave_addr, current_reg, regs_in_block, raw_data))
+            return false;
 
         convert_spectrum_block(raw_data, spectrum_ptr, channels_in_block);
         spectrum_ptr += channels_in_block;
         current_reg += regs_in_block;
         channels_remaining -= channels_in_block;
 
-        if (channels_remaining > 0) mtimer_sleep(1);
+        if (channels_remaining > 0)
+            mtimer_sleep(1);
     }
     return true;
 }

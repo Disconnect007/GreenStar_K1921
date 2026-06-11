@@ -2,8 +2,8 @@
 #include "system_k1921vg015.h"
 #include <string.h>
 
-const double ENK0[] = {-240.01, -120.01, -60.01, -30.01, -15.01, -7.50};
-const double ENK1[] = { 24.01,   12.01,   6.01,   3.01,   1.50,  0.75};
+const double ENK0[] = {105.428572, 105.428572, 105.428572, 105.428572, 105.428572, 105.428572};
+const double ENK1[] = {22.714286,   11.357143,   5.678572,   2.839286,   1.419643,  0.709822};
 
 static uint32_t prev_spectr[4096];
 static double   prev_ltime;

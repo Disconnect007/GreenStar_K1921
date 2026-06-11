@@ -73,6 +73,7 @@ static void UART2_EnableRXInterrupt(void)
     PLIC_SetPriority(IsrVect_IRQ_UART2, 0x2); 
     PLIC_IntEnable(Plic_Mach_Target, IsrVect_IRQ_UART2);
 }
+
 static void periph_init(void) 
 {
     SystemInit();
@@ -86,9 +87,17 @@ static void periph_init(void)
     OLED_init();
     adcsar_init(TSENSOR_ISRC_INT);
     
-    MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
+    MODBUS_WriteInt16(SBS_ADDR, SBS_NCHANNELS_REG, 128);
     mtimer_sleep(50);
-    MODBUS_WriteSingleReg(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
+    MODBUS_WriteInt16(SBS_ADDR, SBS_SP_OFFSET_REG, 0);
+    mtimer_sleep(50);
+    MODBUS_WriteFloat(SBS_ADDR, SBS_ENK0_REG, (float)(0.0));
+    mtimer_sleep(50);
+    MODBUS_WriteFloat(SBS_ADDR, SBS_ENK1_REG, (float)(0.0));
+    mtimer_sleep(50);
+    MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
+    mtimer_sleep(50);
+    MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);
     DoseCalc_Init();
     ESP_Init();
 }
@@ -109,7 +118,7 @@ static void update_oled(void)
 
     switch (state) {
         case DISP_OK: 
-            strcpy(st_text, "   OK"); 
+            strcpy(st_text, "ИЗМЕР"); 
             error_code = 0; 
             break;
         case DISP_WRITE_ERROR:

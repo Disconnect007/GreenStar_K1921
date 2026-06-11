@@ -5,9 +5,12 @@
 
 #define SBS_TEMP_REG 0x0510
 #define SBS_NCHANNELS_REG 0x0902
+#define SBS_ENK0_REG 0x0903
+#define SBS_ENK1_REG 0x0905
 #define SBS_REGRATE_REG 0x0907
 #define SBS_INPRATE_REG 0x0909
 #define SBS_LTIME_REG 0x090d
+#define SBS_SP_OFFSET_REG 0x0918
 #define SBS_SP0_CHANNEL 0x1000
 
 #define SBS_STATE_REG       0x0901   // регистр управления состоянием
