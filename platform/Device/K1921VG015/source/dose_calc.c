@@ -2,8 +2,22 @@
 #include "system_k1921vg015.h"
 #include <string.h>
 
-const double ENK0[] = {105.428572, 105.428572, 105.428572, 105.428572, 105.428572, 105.428572};
-const double ENK1[] = {22.714286,   11.357143,   5.678572,   2.839286,   1.419643,  0.709822};
+const double ENK0[] = {
+    105.428558,  // 128
+    11.076945,   // 256
+    -48.12,      // 512
+    -17.941154,  // 1024
+    -46.53,      // 2048
+    -11.091227   // 4096
+};
+const double ENK1[] = {
+    22.714286,   // 128
+    12.230769,   // 256
+    6.36,        // 512
+    3.117647,    // 1024
+    1.59,        // 2048
+    0.764423     // 4096
+};
 
 static uint32_t prev_spectr[4096];
 static double   prev_ltime;
@@ -67,13 +81,17 @@ bool DoseCalc_Perform(uint16_t nchan, const uint32_t *spectr, uint64_t sp_rec_ti
 static float DoseRateInstant(const uint32_t *s, uint16_t n, float lt, double dz, uint8_t idx, uint64_t t_rec)
 {
     double delta = (double)t_rec / (double)SystemCoreClock;
+    double effective_time = lt - delta;
+    if (effective_time < TIME_EPS) {
+        effective_time = lt;
+    }
     double enk0 = ENK0[idx];
     double enk1 = ENK1[idx];
     double sum = 0.0;
     for (uint16_t i = 0; i < n; i++) {
-        sum += (double)s[i] * (enk0 + enk1 * i);
+        sum += (double)s[i] * (enk1 * i);
     }
-    double rate = (sum * dz) / (lt - delta);
+    double rate = (sum * dz) / effective_time;
     return (float)rate;
 }
 
@@ -85,8 +103,8 @@ static float DoseRatediff(const uint32_t *s, const uint32_t *ps, uint16_t n, flo
     for (uint16_t i = 0; i < n; i++) {
         int32_t diff = (int32_t)s[i] - (int32_t)ps[i];
         if (diff < 0) diff = 0;
-        sum += (double)diff * (enk0 + enk1 * i);
+        sum += (double)diff * (enk1 * i);
     }
-    double rate = (sum * dz) / dt;
+    double rate = (sum * dz) / (double)dt;
     return (float)rate;
 }

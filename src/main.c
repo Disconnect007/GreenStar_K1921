@@ -89,12 +89,6 @@ static void periph_init(void)
     
     MODBUS_WriteInt16(SBS_ADDR, SBS_NCHANNELS_REG, 128);
     mtimer_sleep(50);
-    MODBUS_WriteInt16(SBS_ADDR, SBS_SP_OFFSET_REG, 0);
-    mtimer_sleep(50);
-    MODBUS_WriteFloat(SBS_ADDR, SBS_ENK0_REG, (float)(0.0));
-    mtimer_sleep(50);
-    MODBUS_WriteFloat(SBS_ADDR, SBS_ENK1_REG, (float)(0.0));
-    mtimer_sleep(50);
     MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_STOP);
     mtimer_sleep(50);
     MODBUS_WriteInt16(SBS_ADDR, SBS_STATE_REG, SBS_STATE_CLEAR);

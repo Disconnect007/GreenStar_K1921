@@ -226,8 +226,8 @@ void ESP_HandleDataRequest(void)
             const double enk0 = ENK0[k_idx];
             const double enk1 = ENK1[k_idx];
 
-            PeakInfo peaks[100];
-            int npeaks = find_peaks_simple(raw, nchan, enk0, enk1, 3.5f, peaks, 50);
+            PeakInfo peaks[20];
+            int npeaks = find_peaks_simple(raw, nchan, enk0, enk1, 3.5f, peaks, 20);
 
             PeakInfo top[5];
             int top_count = 0;
